@@ -1,5 +1,6 @@
 import type { Route } from '../content'
-import type { Names, Progress, StationStatus } from './progress'
+import { cityPlan, summarizeStep } from './plan'
+import { bonusKey, familyLine, type Names, type Progress, type StationStatus } from './progress'
 
 const STATUS_TEXT: Record<StationStatus, string> = {
   pending: 'טרם ביקרנו',
@@ -26,23 +27,41 @@ export function formatIsoDate(iso: string): string {
   return formatHebrewDate(new Date(y, m - 1, d))
 }
 
+const indent = (text: string) => text.split('\n').map((l) => `   ${l}`)
+
+/** The downloadable "העיר שלנו" card plus every answer, as plain text. */
 export function buildSummary(route: Route, progress: Progress, names: Names, now = new Date()): string {
   const done = route.stations.filter((s) => progress.stations[s.id]?.status === 'done').length
   const favorite = route.stations.find((s) => s.id === progress.favoriteStationId)
-  const lines: string[] = [
-    `${route.title}: ${route.subtitle}`,
-    formatHebrewDate(now),
-    `משתתפים: ${names.parent}, ${names.kids[0]} ו${names.kids[1]}`,
-    `הושלמו ${done} מתוך ${route.stations.length} תחנות`,
-  ]
+  const family = familyLine(names)
+  const lines: string[] = [`העיר שלנו · ${route.title}`, `${route.subtitle}, ${formatHebrewDate(now)}`]
+  if (family) lines.push(`הצוות: ${family}`)
+  lines.push(`הושלמו ${done} מתוך ${route.stations.length} תחנות`)
   if (favorite) lines.push(`התחנה האהובה: ${favorite.name}`)
-  lines.push('')
+  lines.push('', route.frame.disclaimer, '', '== תוכנית העיר המשפחתית ==', '')
+
+  const plan = cityPlan(route, progress)
+  if (plan.length === 0) lines.push('עוד לא נשמרו החלטות.', '')
+  for (const section of plan) {
+    lines.push(`${section.title} (${section.station.theme})`)
+    for (const line of section.lines) lines.push(...indent(line))
+    lines.push('')
+  }
+
+  lines.push('== כל התשובות ==', '')
   route.stations.forEach((station, i) => {
-    const p = progress.stations[station.id]
-    lines.push(`${i + 1}. ${station.name} (${statusText(p?.status ?? 'pending')})`)
-    lines.push(`   משימה: ${station.task}`)
-    const note = p?.note.trim()
-    if (note) lines.push(`   מה כתבנו: ${note.replace(/\s*\n\s*/g, ' / ')}`)
+    const status = progress.stations[station.id]?.status ?? 'pending'
+    lines.push(`${i + 1}. ${station.name} (${statusText(status)})`)
+    for (const step of station.mission.steps) {
+      const answers = step.kind === 'charter' ? [] : summarizeStep(route, progress, step)
+      if (answers.length) {
+        lines.push(`   ${step.title}:`)
+        for (const a of answers) lines.push(...indent(`  ${a}`))
+      }
+    }
+    const bonus = progress.responses[bonusKey(station.id)]
+    const bonusText = bonus?.text?.answer?.trim()
+    if (bonusText || bonus?.aloud) lines.push(`   בונוס: ${bonusText || 'ענינו בעל פה'}`)
     lines.push('')
   })
   lines.push('תודה על ההרפתקה!')
@@ -51,5 +70,5 @@ export function buildSummary(route: Route, progress: Progress, names: Names, now
 
 export function summaryFileName(now = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, '0')
-  return `shdera-summary-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.txt`
+  return `our-city-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.txt`
 }

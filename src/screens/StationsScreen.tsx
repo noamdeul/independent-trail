@@ -45,6 +45,7 @@ export function StationsScreen({ route, trail }: { route: Route; trail: Trail })
                     <span className="sr-only">תחנה {i + 1}: </span>
                     {station.name}
                   </span>
+                  <span className="row-theme">{station.theme}</span>
                   <span className="row-address">{station.address}</span>
                   <span className="row-meta">
                     <StatusChip status={status} />

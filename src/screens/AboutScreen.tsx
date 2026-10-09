@@ -68,14 +68,19 @@ export function AboutScreen({ route, offline }: { route: Route; offline: Offline
         <h2 id="sources-title" className="card-title">
           מקורות לקריאה נוספת
         </h2>
+        <p className="muted small">המקורות מוצגים לקריאה נוספת בלבד. האפליקציה לא מושכת מהם מידע.</p>
         <ul className="links">
           {route.about.sources.map((s) => (
-            <li key={s.url}>
-              <a href={s.url} target="_blank" rel="noopener noreferrer">
-                <span>{s.label}</span>
-                <IconExternal size={18} />
-                <span className="sr-only">(נפתח בחלון חדש)</span>
-              </a>
+            <li key={s.label}>
+              {s.url ? (
+                <a href={s.url} target="_blank" rel="noopener noreferrer">
+                  <span>{s.label}</span>
+                  <IconExternal size={18} />
+                  <span className="sr-only">(נפתח בחלון חדש)</span>
+                </a>
+              ) : (
+                <span className="source-plain">{s.label}</span>
+              )}
             </li>
           ))}
         </ul>

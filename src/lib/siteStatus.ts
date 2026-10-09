@@ -15,7 +15,7 @@ export function siteStatusMessage(status: SiteStatus): string {
   return `${status.placeName} ${STATUS_LABEL[status.status]} לפי הבדיקה מ־${formatShortDate(status.lastChecked)}.`
 }
 
-export const EXTERIOR_MESSAGE = 'בתחנה זו עוצרים מחוץ לבניין.'
+export const EXTERIOR_MESSAGE = 'לא מתוכננת כניסה. בתחנה זו עוצרים מחוץ לבניין.'
 
 /** All notice lines for a station, in display order. */
 export function stationNotices(station: Station): { text: string; strong: boolean }[] {
