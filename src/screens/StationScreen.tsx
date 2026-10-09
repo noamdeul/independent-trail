@@ -1,5 +1,6 @@
 import { useEffect, useId } from 'react'
 import type { Route } from '../content'
+import { DiscoverCard } from '../components/DiscoverCard'
 import { Disclosure } from '../components/Disclosure'
 import { LevelPicker } from '../components/GroupEditor'
 import { IconBook, IconBulb, IconCheck, IconExternal, IconInfo, IconSkip, IconWalk, IconWarning, StationGlyph } from '../components/Icons'
@@ -7,7 +8,7 @@ import { RolesCard } from '../components/RolesCard'
 import { StatusChip } from '../components/StatusChip'
 import { AloudToggle, StepCard } from '../components/steps'
 import { walkingDirectionsUrl } from '../lib/maps'
-import { bonusKey, countByStatus, isStepAnswered, visibleSteps } from '../lib/progress'
+import { bonusKey, countByStatus, discoverKey, isStepAnswered, visibleSteps } from '../lib/progress'
 import { hrefFor, navigate } from '../lib/router'
 import { stationNotices } from '../lib/siteStatus'
 import { statusText } from '../lib/summary'
@@ -48,6 +49,22 @@ export function StationScreen({ route, trail, stationId }: { route: Route; trail
   const lastAnswered = steps.reduce((last, st, i) => (isStepAnswered(responses[st.id]) ? i : last), -1)
   const stepsOpen = Math.min(Math.max(1, state.stepsOpen, lastAnswered + 1), steps.length)
   const challenge = group.level === 'challenge'
+  // "מגלים את הסיפור": until the group picks the official media or the written
+  // story, the mission waits. Stations already in progress are never blocked.
+  const discover = station.media ? progress.responses[discoverKey(station.id)]?.discover : 'text'
+  const alreadyStarted =
+    state.status !== 'pending' || state.stepsOpen > 1 || steps.some((st) => isStepAnswered(responses[st.id]))
+  const missionReady = !!discover || alreadyStarted
+  // After watching or listening, the written story stays available but folded,
+  // so nobody has to hear and then read the same thing.
+  const storyMode: 'none' | 'collapsed' | 'full' =
+    discover === 'media' ? 'collapsed' : discover === 'text' || alreadyStarted ? 'full' : 'none'
+  const moreParagraphs = station.more.map((p) => (
+    <p key={p.text} className={`para para-${p.kind}`}>
+      {p.kind !== 'fact' && <span className="para-badge">{p.kind === 'interpretation' ? 'פרשנות' : 'שימו לב'}</span>}
+      {p.text}
+    </p>
+  ))
   const bonus = responses[bonusKey(station.id)] ?? {}
   const activeTeam = trail.teams ? group.teams.find((tm) => tm.id === trail.scope) : undefined
 
@@ -115,28 +132,36 @@ export function StationScreen({ route, trail, stationId }: { route: Route; trail
 
       <RolesCard route={route} trail={trail} station={station} index={index} />
 
-      <section className="card story" aria-labelledby="story-title">
-        <h2 id="story-title" className="card-title">
-          <IconBook size={20} /> הסיפור בקצרה
-        </h2>
-        <p className="story-text">{station.story}</p>
-        <Disclosure
-          key={group.level}
-          label="רוצים לדעת יותר?"
-          openLabel="הסתרת ההרחבה"
-          icon={<IconInfo size={20} />}
-          tone="reveal"
-          defaultOpen={challenge}
-        >
-          {station.more.map((p) => (
-            <p key={p.text} className={`para para-${p.kind}`}>
-              {p.kind !== 'fact' && <span className="para-badge">{p.kind === 'interpretation' ? 'פרשנות' : 'שימו לב'}</span>}
-              {p.text}
-            </p>
-          ))}
-        </Disclosure>
-      </section>
+      {station.media && <DiscoverCard route={route} trail={trail} station={station} />}
 
+      {storyMode === 'collapsed' && (
+        <section className="card story story-collapsed" aria-label="הסיפור הכתוב">
+          <Disclosure label="הסיפור הכתוב (לא חובה)" openLabel="הסתרת הסיפור הכתוב" icon={<IconBook size={20} />}>
+            <p className="story-text">{station.story}</p>
+            {moreParagraphs}
+          </Disclosure>
+        </section>
+      )}
+      {storyMode === 'full' && (
+        <section className="card story" aria-labelledby="story-title">
+          <h2 id="story-title" className="card-title">
+            <IconBook size={20} /> הסיפור בקצרה
+          </h2>
+          <p className="story-text">{station.story}</p>
+          <Disclosure
+            key={group.level}
+            label="רוצים לדעת יותר?"
+            openLabel="הסתרת ההרחבה"
+            icon={<IconInfo size={20} />}
+            tone="reveal"
+            defaultOpen={challenge}
+          >
+            {moreParagraphs}
+          </Disclosure>
+        </section>
+      )}
+
+      {missionReady ? (
       <section className="card mission" aria-labelledby="mission-title">
         <h2 id="mission-title" className="card-title">
           <IconBulb size={20} /> {t('המשימה שלנו', 'המשימה שלי')}: {mission.title}
@@ -221,6 +246,9 @@ export function StationScreen({ route, trail, stationId }: { route: Route; trail
           )
         )}
       </section>
+      ) : (
+        <p className="mission-waiting muted">המשימה תופיע אחרי שבוחרים איך מגלים את הסיפור.</p>
+      )}
 
       <div className="actionbar">
         {state.status === 'done' ? (

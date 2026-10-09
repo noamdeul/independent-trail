@@ -5,7 +5,7 @@ import { IconDownload, IconHeart, IconIceCream, IconRefresh } from '../component
 import { charterText, charterValues, cityPlan, findCharterStep, summarizeStep } from '../lib/plan'
 import { bonusKey, countByStatus, nextStationId, type Responses } from '../lib/progress'
 import { hrefFor, navigate } from '../lib/router'
-import { boards, buildSummary, cityTitle, participantsLine, summaryFileName } from '../lib/summary'
+import { boards, buildSummary, cityTitle, discoverLine, participantsLine, summaryFileName } from '../lib/summary'
 import type { Trail } from '../lib/useTrail'
 import { useVoice } from '../lib/voice'
 
@@ -83,7 +83,7 @@ function CityCard({
   )
 }
 
-function AnswersList({ route, responses, solo }: { route: Route; responses: Responses; solo: boolean }) {
+function AnswersList({ route, responses, shared, solo }: { route: Route; responses: Responses; shared: Responses; solo: boolean }) {
   const answers = route.stations
     .map((station) => ({
       station,
@@ -92,15 +92,21 @@ function AnswersList({ route, responses, solo }: { route: Route; responses: Resp
         .map((st) => ({ step: st, lines: summarizeStep(route, responses, st, solo) }))
         .filter((x) => x.lines.length > 0),
       bonus: responses[bonusKey(station.id)],
+      discovered: discoverLine(shared, station.id, solo),
     }))
-    .filter((x) => x.steps.length > 0 || x.bonus?.text?.answer?.trim() || x.bonus?.aloud)
+    .filter((x) => x.steps.length > 0 || x.bonus?.text?.answer?.trim() || x.bonus?.aloud || x.discovered)
   if (answers.length === 0) return <p className="muted">עוד אין תשובות שמורות. גם לענות בעל פה זה מצוין.</p>
   return (
     <Disclosure label={`הצגת התשובות (${answers.length} תחנות)`} openLabel="הסתרת התשובות">
       <dl className="answers">
-        {answers.map(({ station, steps, bonus }) => (
+        {answers.map(({ station, steps, bonus, discovered }) => (
           <div key={station.id}>
             <dt>{station.name}</dt>
+            {discovered && (
+              <dd>
+                <strong>מגלים את הסיפור:</strong> {discovered}
+              </dd>
+            )}
             {steps.map(({ step, lines }) => (
               <dd key={step.id}>
                 <strong>{step.title}:</strong> {lines.join(' · ')}
@@ -248,11 +254,11 @@ export function FinishScreen({ route, trail }: { route: Route; trail: Trail }) {
           all.map((board) => (
             <div key={board.teamId ?? 'all'} className="team-answers">
               <h3 className="subhead">{board.label}</h3>
-              <AnswersList route={route} responses={board.responses} solo={false} />
+              <AnswersList route={route} responses={board.responses} shared={progress.responses} solo={false} />
             </div>
           ))
         ) : (
-          <AnswersList route={route} responses={all[0].responses} solo={solo} />
+          <AnswersList route={route} responses={all[0].responses} shared={progress.responses} solo={solo} />
         )}
       </section>
 

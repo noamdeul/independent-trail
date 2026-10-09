@@ -42,6 +42,25 @@ export function useTrail(route: Route) {
     setPersistent(storage.persistent)
   }, [storage, progress])
 
+  // Switching to another app (e.g. the official trail app for its video) can
+  // freeze or unload this page at any moment. Write the latest state right
+  // away when the page is hidden, so coming back restores the same point.
+  const latest = useRef({ progress, group })
+  latest.current = { progress, group }
+  useEffect(() => {
+    const flush = () => {
+      saveProgress(storage, latest.current.progress)
+      saveGroup(storage, route, latest.current.group)
+    }
+    const onVisibility = () => document.visibilityState === 'hidden' && flush()
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pagehide', flush)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pagehide', flush)
+    }
+  }, [storage, route])
+
   const teams = teamsActive(group)
   /** Answers go to the whole group, or to the team holding the device. */
   const scope = teams ? group.activeTeamId : null
@@ -84,6 +103,17 @@ export function useTrail(route: Route) {
     [update, scope],
   )
 
+  /** Like `respond`, but always for the whole group, even in team mode (e.g. watching a station's story together). */
+  const respondShared = useCallback(
+    (key: string, patch: StepResponse | ((r: StepResponse) => StepResponse)) =>
+      update((p) => {
+        const prev = p.responses[key] ?? {}
+        const next = typeof patch === 'function' ? patch(prev) : { ...prev, ...patch }
+        return { ...p, responses: { ...p.responses, [key]: next } }
+      }),
+    [update],
+  )
+
   const setText = useCallback(
     (stepId: string, key: string, value: string) => respond(stepId, (r) => ({ ...r, text: { ...r.text, [key]: value } })),
     [respond],
@@ -116,6 +146,7 @@ export function useTrail(route: Route) {
     responses,
     persistent,
     respond,
+    respondShared,
     setText,
     visitStation,
     /** Opens one more step after the `shown` steps currently on screen. */

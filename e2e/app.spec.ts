@@ -35,6 +35,13 @@ const step = (page: Page, title: string) =>
 
 const nextStep = (page: Page) => page.getByRole('button', { name: /^לשלב הבא/ }).click()
 
+/** The tests below are about missions: continue with the written story when the discovery card asks. */
+async function readStory(page: Page) {
+  const choice = page.getByRole('button', { name: 'ממשיכים עם הסיפור הכתוב' })
+  await choice.or(page.locator('section.mission')).first().waitFor()
+  if (await choice.isVisible()) await choice.click()
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('./')
   await page.evaluate(() => localStorage.clear())
@@ -71,9 +78,11 @@ test('full family flow through the interactive missions to "our city"', async ({
   await page.getByLabel('משתתף/ת 3', { exact: true }).fill('רוני')
   await page.getByRole('radio', { name: /מאתגרת/ }).check()
   await page.getByRole('button', { name: 'מתחילים', exact: true }).click()
+  await readStory(page)
 
   // ---- Station 1: story, roles, more, progressive steps, budget, choice, bonus
   await expect(page).toHaveURL(/#\/station\/kiosk$/)
+  await readStory(page)
   await expect(page.getByText('תחנה 1 מתוך 7')).toBeVisible()
   await expect(page.locator('.story-text')).toContainText('בשנת 1910 הוקם כאן הקיוסק הראשון')
   const roles = page.getByRole('region', { name: 'תפקידים בתחנה' })
@@ -118,6 +127,7 @@ test('full family flow through the interactive missions to "our city"', async ({
 
   // ---- Station 2: see/think, categorize with graded hints and explicit solution, then skip
   await expect(page).toHaveURL(/#\/station\/mosaic$/)
+  await readStory(page)
   await expect(page.getByText('ייתכן שהמזרקה לא פועלת')).toBeVisible()
   await expect(page.getByText(/אם פרט מסוים אינו נראה/)).toBeVisible()
   await step(page, 'התבוננות').getByLabel('ראינו (מה רואים ממש)').first().fill('דג גדול')
@@ -139,6 +149,7 @@ test('full family flow through the interactive missions to "our city"', async ({
 
   // ---- Station 3: match, lottery, rule
   await expect(page).toHaveURL(/#\/station\/weiss-house$/)
+  await readStory(page)
   await expect(page.getByText(/איור סכמטי של מגרשים בדיוניים/)).toBeVisible()
   const match = step(page, 'מי גר איפה?')
   await match.getByRole('group', { name: /משפחת שקט/ }).getByRole('button', { name: 'מגרש ב' }).click()
@@ -170,6 +181,7 @@ test('full family flow through the interactive missions to "our city"', async ({
 
   // ---- Station 4: per-plan pros and cons, pick a plan
   await expect(page).toHaveURL(/#\/station\/gymnasium$/)
+  await readStory(page)
   await expect(page.getByText(/המבנה הישן נהרס ב־1959/)).toBeVisible()
   await expect(page.getByText(/לא מתוכננת כניסה/)).toBeVisible()
   await expect(step(page, 'כרטיסי נקודת מבט')).toContainText('בקבוצה גדולה כמה אנשים מייצגים אותה עמדה')
@@ -183,6 +195,7 @@ test('full family flow through the interactive missions to "our city"', async ({
 
   // ---- Station 5: order with up/down buttons
   await expect(page).toHaveURL(/#\/station\/founders$/)
+  await readStory(page)
   await nextStep(page)
   const order = step(page, 'סדר השכבות')
   // start: city, land, homes -> move city down twice
@@ -195,6 +208,7 @@ test('full family flow through the interactive missions to "our city"', async ({
 
   // ---- Station 6: budget 15, then the cut to 12 starting from the earlier plan
   await expect(page).toHaveURL(/#\/station\/dizengoff-statue$/)
+  await readStory(page)
   await nextStep(page)
   const b15 = step(page, 'תקציב של 15')
   await b15.getByRole('button', { name: /^גינה ומגרש משחקים/ }).click()
@@ -216,6 +230,7 @@ test('full family flow through the interactive missions to "our city"', async ({
 
   // ---- Station 7: timeline, follow-up, principles, charter
   await expect(page).toHaveURL(/#\/station\/independence-hall$/)
+  await readStory(page)
   await expect(page.getByRole('note')).toContainText('היכל העצמאות סגור לשיפוצים לפי הבדיקה מ־9.10.2026.')
   await expect(page.getByRole('note')).toContainText('לא מתוכננת כניסה.')
   const timeline = step(page, 'חידת רצף')
@@ -265,6 +280,7 @@ test('full family flow through the interactive missions to "our city"', async ({
 
   // Station 2 was skipped, so we go back to it, answers intact
   await expect(page).toHaveURL(/#\/station\/mosaic$/)
+  await readStory(page)
   await expect(step(page, 'חידה').locator('.cat-solution')).toHaveCount(3)
   await page.getByRole('button', { name: 'סיימנו את התחנה' }).click()
 
@@ -310,6 +326,7 @@ test('full family flow through the interactive missions to "our city"', async ({
   await page.reload()
   await expect(page.getByRole('button', { name: 'מתחילים', exact: true })).toBeVisible()
   await page.goto('./#/station/kiosk')
+  await readStory(page)
   await expect(page.locator('section.step')).toHaveCount(1)
   await expect(page.getByLabel('דבר ראשון')).toHaveValue('')
 })
@@ -317,6 +334,7 @@ test('full family flow through the interactive missions to "our city"', async ({
 test('light level shows fewer steps and more explanation, and the level can change mid-route', async ({ page }) => {
   await page.getByRole('radio', { name: /קלילה/ }).check()
   await page.getByRole('button', { name: 'מתחילים', exact: true }).click()
+  await readStory(page)
   // the observation step is skipped at the light level
   await expect(page.locator('section.step h3').first()).toContainText('אתגר תקציב')
   await step(page, 'אתגר תקציב').getByRole('button', { name: /^הצללה/ }).click()
@@ -341,6 +359,7 @@ test('light level shows fewer steps and more explanation, and the level can chan
 
 test('navigation links open Google Maps walking directions with Hebrew queries', async ({ page }) => {
   await page.goto('./#/station/kiosk')
+  await readStory(page)
   const link = page.getByRole('link', { name: /ניווט בהליכה/ })
   await expect(link).toHaveAttribute('target', '_blank')
   const href = (await link.getAttribute('href'))!
@@ -382,10 +401,12 @@ test('works under the repository path and offline after the first visit', async 
   await expect(page.getByRole('heading', { level: 1, name: 'הרפתקה בשדרה' })).toBeVisible()
   await expect(page.getByText('אין חיבור לאינטרנט')).toBeVisible()
   await page.getByRole('button', { name: 'מתחילים', exact: true }).click()
+  await readStory(page)
   await expect(page.getByText('תחנה 1 מתוך 7')).toBeVisible()
   await nextStep(page)
   await expect(step(page, 'אתגר תקציב')).toBeVisible()
   await page.goto('./#/station/independence-hall')
+  await readStory(page)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('היכל העצמאות')
   await context.setOffline(false)
 })
@@ -406,6 +427,7 @@ test('keeps working when localStorage is unavailable', async ({ browser }) => {
   await page.goto('./')
   await expect(page.getByText('השמירה במכשיר לא זמינה')).toBeVisible()
   await page.getByRole('button', { name: 'מתחילים', exact: true }).click()
+  await readStory(page)
   await nextStep(page)
   await step(page, 'אתגר תקציב').getByRole('button', { name: /^הצללה/ }).click()
   await expect(step(page, 'אתגר תקציב').locator('.meter')).toContainText('נשארו 6')

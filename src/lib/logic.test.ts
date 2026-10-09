@@ -18,6 +18,7 @@ import {
 } from './group'
 import {
   bonusKey,
+  discoverKey,
   createProgress,
   isStepAnswered,
   loadProgress,
@@ -34,7 +35,8 @@ import {
 import { hrefFor, parseHash } from './router'
 import { stationNotices } from './siteStatus'
 import { createStorage } from './storage'
-import { boards, buildSummary } from './summary'
+import { boards, buildSummary, discoverLine } from './summary'
+import { hasPlayableMedia } from '../components/DiscoverCard'
 
 const people = (n: number): Participant[] => Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: `שם${i + 1}` }))
 const groupOf = (n: number, extra: Partial<GroupSettings> = {}): GroupSettings => ({
@@ -544,3 +546,59 @@ describe('summary', () => {
     expect(text).toContain('העיר של צוות ג: ברז מי שתייה')
   })
 })
+
+describe('official app media', () => {
+  it('uses a manual hand-off everywhere, with no invented links or files', () => {
+    const questions = route.stations.map((s) => s.media?.prepQuestion)
+    expect(questions).toEqual([
+      'גלו פרט אחד על החיים בעיר הצעירה.',
+      'שימו לב כיצד תמונות מספרות על תקופות שונות.',
+      'נסו לגלות איך חילקו את המגרשים.',
+      'שימו לב מה השתנה במקום הזה.',
+      'איזה פרט בסיפור המייסדים היה חדש לכם?',
+      'איזה פרט חדש גיליתם על ראש העיר הראשון?',
+      'גלו פרט אחד על הבית או על הכרזת המדינה.',
+    ])
+    for (const s of route.stations) {
+      expect(s.media?.kind, s.id).toBe('manual')
+      expect(s.media?.url, s.id).toBeUndefined()
+      expect(s.media?.appStationName, s.id).toBeTruthy()
+      expect(hasPlayableMedia(s.media), s.id).toBe(false)
+    }
+    expect(route.officialApp?.storeUrl).toBe('https://apps.apple.com/il/app/id1422469642')
+  })
+
+  it('only plays media that has a verified URL', () => {
+    expect(hasPlayableMedia({ kind: 'video', appStationName: 'x', prepQuestion: 'q' })).toBe(false)
+    expect(hasPlayableMedia({ kind: 'manual', appStationName: 'x', prepQuestion: 'q', url: 'https://example.org/a.mp4' })).toBe(false)
+    expect(hasPlayableMedia({ kind: 'audio', appStationName: 'x', prepQuestion: 'q', url: 'https://example.org/a.mp3' })).toBe(true)
+  })
+
+  it('saves the discovery choice and what the group shared', () => {
+    const loaded = normalizeProgress(route, {
+      version: 3,
+      responses: {
+        [discoverKey('kiosk')]: { discover: 'media', aloud: true, text: { share: 'גזוז' } },
+        [discoverKey('mosaic')]: { discover: 'video' },
+      },
+    })
+    expect(loaded.responses['kiosk:discover']).toEqual({ discover: 'media', aloud: true, text: { share: 'גזוז' } })
+    expect(loaded.responses['mosaic:discover']).toEqual({})
+    expect(discoverLine(loaded.responses, 'kiosk', false)).toBe('צפינו או האזנו באפליקציה הרשמית. מה גילינו: גזוז')
+    expect(discoverLine({ 'kiosk:discover': { discover: 'media', aloud: true } }, 'kiosk', true)).toBe(
+      'צפיתי או האזנתי באפליקציה הרשמית, ועניתי בעל פה',
+    )
+    expect(discoverLine({ 'kiosk:discover': { discover: 'text' } }, 'kiosk', false)).toBe('הסיפור הכתוב')
+    expect(discoverLine({}, 'kiosk', false)).toBeNull()
+  })
+
+  it('does not turn shared discovery answers into an extra city card in team mode', () => {
+    const p = withResponses(createProgress(route), {
+      'kiosk:discover': { discover: 'media' },
+      's1-budget@t1': { selected: ['bench'] },
+    })
+    const g = repairTeams(groupOf(8, { mode: 'teams', ...autoTeams(people(8)) }))
+    expect(boards(g, p).map((b) => b.title)).toEqual(['העיר של צוות א', 'העיר של צוות ב'])
+  })
+})
+

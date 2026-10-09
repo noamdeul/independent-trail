@@ -29,6 +29,11 @@ export interface StepResponse {
   announced?: boolean
   followHints?: number
   followSolved?: boolean
+  /**
+   * "מגלים את הסיפור": how the group took in the story. "media" is set by hand
+   * after watching or listening in the official app; nothing can verify it.
+   */
+  discover?: 'media' | 'text'
 }
 
 export type Responses = Record<string, StepResponse>
@@ -53,6 +58,7 @@ export interface Progress {
 // v3 data is a superset of v2, so it keeps the v2 key and old progress loads.
 export const progressKey = (routeId: string) => `shdera:v2:progress:${routeId}`
 export const bonusKey = (stationId: string) => `${stationId}:bonus`
+export const discoverKey = (stationId: string) => `${stationId}:discover`
 
 /** Storage key of an answer for the whole group (teamId null) or one team. */
 export function scopeKey(key: string, teamId: string | null): string {
@@ -128,6 +134,7 @@ function normalizeResponse(v: unknown): StepResponse | null {
   if (lottery) r.lottery = lottery
   if (v.hints !== undefined) r.hints = clampInt(v.hints, 0, 2, 0)
   if (v.followHints !== undefined) r.followHints = clampInt(v.followHints, 0, 2, 0)
+  if (v.discover === 'media' || v.discover === 'text') r.discover = v.discover
   return r
 }
 
@@ -136,7 +143,9 @@ export function normalizeProgress(route: Route, raw: unknown): Progress {
   const base = createProgress(route)
   if (!isObject(raw) || (raw.version !== 2 && raw.version !== 3)) return base
   const ids = new Set(route.stations.map((s) => s.id))
-  const stepIds = new Set(route.stations.flatMap((s) => [...s.mission.steps.map((st) => st.id), bonusKey(s.id)]))
+  const stepIds = new Set(
+    route.stations.flatMap((s) => [...s.mission.steps.map((st) => st.id), bonusKey(s.id), discoverKey(s.id)]),
+  )
 
   const stations = isObject(raw.stations) ? raw.stations : {}
   for (const station of route.stations) {
