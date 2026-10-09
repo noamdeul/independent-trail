@@ -144,6 +144,22 @@ export const IconRefresh = (p: IconProps) => (
     <path d="M20 12a8 8 0 11-2.3-5.6M20 4v5h-5" />
   </Svg>
 )
+export const IconPlus = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 5v14M5 12h14" />
+  </Svg>
+)
+export const IconTrash = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
+  </Svg>
+)
+export const IconUsers = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="9" cy="8" r="3.5" />
+    <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6M16 4.5a3.5 3.5 0 010 7M18 14c2.2.6 3.5 2.8 3.5 6" />
+  </Svg>
+)
 export const IconPencil = (p: IconProps) => (
   <Svg {...p}>
     <path d="M4 20l1-4L16 5l3 3L8 19l-4 1zM14 7l3 3" />

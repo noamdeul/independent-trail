@@ -1,39 +1,24 @@
 import { useEffect, useId } from 'react'
 import type { Route } from '../content'
 import { Disclosure } from '../components/Disclosure'
-import {
-  IconBook,
-  IconBulb,
-  IconCheck,
-  IconCompass,
-  IconExternal,
-  IconEye,
-  IconInfo,
-  IconSkip,
-  IconSwap,
-  IconWalk,
-  IconWarning,
-  StationGlyph,
-} from '../components/Icons'
+import { LevelPicker } from '../components/GroupEditor'
+import { IconBook, IconBulb, IconCheck, IconExternal, IconInfo, IconSkip, IconWalk, IconWarning, StationGlyph } from '../components/Icons'
+import { RolesCard } from '../components/RolesCard'
 import { StatusChip } from '../components/StatusChip'
 import { AloudToggle, StepCard } from '../components/steps'
 import { walkingDirectionsUrl } from '../lib/maps'
-import { bonusKey, countByStatus, rolesFor } from '../lib/progress'
+import { bonusKey, countByStatus, visibleSteps } from '../lib/progress'
 import { hrefFor, navigate } from '../lib/router'
 import { stationNotices } from '../lib/siteStatus'
 import { statusText } from '../lib/summary'
 import type { Trail } from '../lib/useTrail'
-
-const ROLE_ICONS: Record<string, typeof IconCompass> = {
-  navigator: IconCompass,
-  researcher: IconEye,
-  presenter: IconBook,
-}
+import { useVoice } from '../lib/voice'
 
 export function StationScreen({ route, trail, stationId }: { route: Route; trail: Trail; stationId: string }) {
   const index = route.stations.findIndex((s) => s.id === stationId)
   const station = route.stations[index]
-  const { progress, shownNames, visitStation } = trail
+  const { progress, group, responses, visitStation } = trail
+  const { solo, t } = useVoice()
   const bonusId = useId()
 
   useEffect(() => {
@@ -54,14 +39,15 @@ export function StationScreen({ route, trail, stationId }: { route: Route; trail
   }
 
   const state = progress.stations[station.id]
-  const roles = rolesFor(route, progress, shownNames, station.id)
   const total = route.stations.length
   const notices = stationNotices(station)
   const doneCount = countByStatus(progress, 'done')
   const mission = station.mission
-  const stepsOpen = Math.min(state.stepsOpen, mission.steps.length)
-  const full = progress.mode === 'full'
-  const bonus = progress.responses[bonusKey(station.id)] ?? {}
+  const steps = visibleSteps(station, group.level)
+  const stepsOpen = Math.min(Math.max(1, state.stepsOpen), steps.length)
+  const challenge = group.level === 'challenge'
+  const bonus = responses[bonusKey(station.id)] ?? {}
+  const activeTeam = trail.teams ? group.teams.find((tm) => tm.id === trail.scope) : undefined
 
   const goNext = (nextId: string | null) => {
     navigate(nextId ? { name: 'station', id: nextId } : { name: 'finish' })
@@ -106,12 +92,7 @@ export function StationScreen({ route, trail, stationId }: { route: Route; trail
         </div>
       </div>
 
-      <a
-        className="btn btn-nav"
-        href={walkingDirectionsUrl(station.mapsQuery)}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
+      <a className="btn btn-nav" href={walkingDirectionsUrl(station.mapsQuery)} target="_blank" rel="noopener noreferrer">
         <IconWalk size={24} />
         <span>ניווט בהליכה</span>
         <IconExternal size={18} className="btn-trailing" />
@@ -130,60 +111,75 @@ export function StationScreen({ route, trail, stationId }: { route: Route; trail
         </div>
       )}
 
-      <section className="card roles" aria-label="תפקידים בתחנה">
-        <ul>
-          {roles.map((role) => {
-            const Icon = ROLE_ICONS[role.roleId] ?? IconCompass
-            return (
-              <li key={role.roleId}>
-                <Icon size={22} />
-                <span>
-                  <span className="role-label">{role.label}</span> <strong>{role.name}</strong>
-                  <span className="role-desc">{role.description}</span>
-                </span>
-              </li>
-            )
-          })}
-        </ul>
-        <button type="button" className="btn btn-small btn-ghost" onClick={() => trail.shiftRoles(station.id)}>
-          <IconSwap size={20} />
-          <span>החלפת תפקידים</span>
-        </button>
-      </section>
+      <RolesCard route={route} trail={trail} station={station} index={index} />
 
       <section className="card story" aria-labelledby="story-title">
         <h2 id="story-title" className="card-title">
           <IconBook size={20} /> הסיפור בקצרה
         </h2>
         <p className="story-text">{station.story}</p>
-        {full && (
-          <Disclosure label="רוצים לדעת יותר?" openLabel="הסתרת ההרחבה" icon={<IconInfo size={20} />} tone="reveal">
-            {station.more.map((p) => (
-              <p key={p.text} className={`para para-${p.kind}`}>
-                {p.kind !== 'fact' && <span className="para-badge">{p.kind === 'interpretation' ? 'פרשנות' : 'שימו לב'}</span>}
-                {p.text}
-              </p>
-            ))}
-          </Disclosure>
-        )}
+        <Disclosure
+          key={group.level}
+          label="רוצים לדעת יותר?"
+          openLabel="הסתרת ההרחבה"
+          icon={<IconInfo size={20} />}
+          tone="reveal"
+          defaultOpen={challenge}
+        >
+          {station.more.map((p) => (
+            <p key={p.text} className={`para para-${p.kind}`}>
+              {p.kind !== 'fact' && <span className="para-badge">{p.kind === 'interpretation' ? 'פרשנות' : 'שימו לב'}</span>}
+              {p.text}
+            </p>
+          ))}
+        </Disclosure>
       </section>
 
       <section className="card mission" aria-labelledby="mission-title">
         <h2 id="mission-title" className="card-title">
-          <IconBulb size={20} /> המשימה שלנו: {mission.title}
+          <IconBulb size={20} /> {t('המשימה שלנו', 'המשימה שלי')}: {mission.title}
         </h2>
+        <div className="mission-level">
+          <span className="small">רמה:</span>
+          <LevelPicker route={route} trail={trail} compact />
+        </div>
+        {trail.teams && (
+          <div className="team-switch">
+            <p className="small" id="team-switch-label">
+              הצוות שעונה עכשיו במכשיר:
+            </p>
+            <div className="segmented" role="group" aria-labelledby="team-switch-label">
+              {group.teams.map((tm) => (
+                <button
+                  key={tm.id}
+                  type="button"
+                  aria-pressed={tm.id === trail.scope}
+                  className={tm.id === trail.scope ? 'seg-on' : ''}
+                  onClick={() => trail.setActiveTeam(tm.id)}
+                >
+                  {tm.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {mission.scenario && (
           <p className="scenario">
             <span className="para-badge">תרחיש בדיוני</span> {mission.scenario}
           </p>
         )}
         <p className="muted small">
-          {mission.steps.length} שלבים. אפשר להקליד, לבחור כרטיסים או פשוט לדבר ולסמן ״ענינו בעל פה״.
+          {steps.length} שלבים.{' '}
+          {t(
+            'אפשר להקליד, לבחור כרטיסים או פשוט לדבר ולסמן ״ענינו בעל פה״. במשימות דיון כל אחד יכול להציע, ושומרים החלטה משותפת אחת.',
+            'אפשר להקליד, לבחור כרטיסים או פשוט לענות בעל פה ולסמן ״עניתי בעל פה״.',
+          )}
+          {activeTeam && ` התשובות כאן נשמרות ל${activeTeam.name}.`}
         </p>
 
-        {mission.steps.slice(0, stepsOpen).map((step, i) => (
+        {steps.slice(0, stepsOpen).map((step, i) => (
           <StepCard
-            key={step.id}
+            key={`${step.id}@${trail.scope ?? 'all'}`}
             route={route}
             trail={trail}
             step={step}
@@ -193,26 +189,22 @@ export function StationScreen({ route, trail, stationId }: { route: Route; trail
           />
         ))}
 
-        {stepsOpen < mission.steps.length ? (
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => trail.openNextStep(station.id, mission.steps.length)}
-          >
-            לשלב הבא: {mission.steps[stepsOpen].title}
+        {stepsOpen < steps.length ? (
+          <button type="button" className="btn btn-secondary" onClick={() => trail.openNextStep(station.id, steps.length)}>
+            לשלב הבא: {steps[stepsOpen].title}
           </button>
         ) : (
-          full && (
+          challenge && (
             <section className="bonus" aria-labelledby="bonus-title">
               <h3 id="bonus-title" className="step-title">
                 <span className="step-letter" aria-hidden="true">
                   ★
                 </span>
-                <span>בונוס (לא חובה)</span>
+                <span>דילמת בונוס (לא חובה)</span>
               </h3>
-              <p className="step-prompt">{mission.bonus}</p>
+              <p className="step-prompt">{(solo && mission.soloBonus) || mission.bonus}</p>
               <div className="field">
-                <label htmlFor={bonusId}>התשובה שלנו</label>
+                <label htmlFor={bonusId}>{t('התשובה שלנו', 'התשובה שלי')}</label>
                 <input
                   id={bonusId}
                   type="text"
@@ -222,10 +214,7 @@ export function StationScreen({ route, trail, stationId }: { route: Route; trail
                   onChange={(e) => trail.setText(bonusKey(station.id), 'answer', e.target.value)}
                 />
               </div>
-              <AloudToggle
-                pressed={!!bonus.aloud}
-                onToggle={() => trail.respond(bonusKey(station.id), { aloud: !bonus.aloud })}
-              />
+              <AloudToggle pressed={!!bonus.aloud} onToggle={() => trail.respond(bonusKey(station.id), { aloud: !bonus.aloud })} />
             </section>
           )
         )}
@@ -246,12 +235,12 @@ export function StationScreen({ route, trail, stationId }: { route: Route; trail
           <>
             <button type="button" className="btn btn-primary" onClick={() => goNext(trail.complete(station.id))}>
               <IconCheck size={22} />
-              <span>סיימנו את התחנה</span>
+              <span>{t('סיימנו את התחנה', 'סיימתי את התחנה')}</span>
             </button>
             <button
               type="button"
               className="btn btn-secondary"
-              aria-label="דילוג, נחזור אחר כך"
+              aria-label={t('דילוג, נחזור אחר כך', 'דילוג, אחזור אחר כך')}
               onClick={() => goNext(trail.skip(station.id))}
             >
               <IconSkip size={20} />

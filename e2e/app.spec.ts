@@ -47,20 +47,23 @@ test('welcome screen: Hebrew RTL, frame story, route modes, fits 375px', async (
   await expect(page.getByRole('heading', { level: 1, name: 'הרפתקה בשדרה' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'איך בונים עיר?' })).toBeVisible()
   await expect(page.getByText(/משחק בדיוני בהשראת ההיסטוריה/).first()).toBeVisible()
-  await expect(page.getByRole('radio', { name: /מסלול מלא, כ־90–120 דקות/ })).toBeChecked()
+  await expect(page.getByRole('radio', { name: /רגילה, כ־90–120 דקות/ })).toBeChecked()
   await expect(page.getByText('כ־90–120 דקות (הערכה)')).toBeVisible()
-  await page.getByRole('radio', { name: /מסלול קליל/ }).check()
+  await page.getByRole('radio', { name: /קלילה/ }).check()
   await expect(page.getByText('כ־60–90 דקות (הערכה)')).toBeVisible()
-  await expect(page.getByLabel('מבוגר/ת')).toHaveValue('')
+  await expect(page.getByLabel('משתתף/ת 1')).toHaveValue('נועם')
+  await expect(page.getByLabel('משתתף/ת 2')).toHaveValue('עומרי')
+  await expect(page.getByLabel('משתתף/ת 3')).toHaveValue('אלה')
+  await expect(page.locator('.person-age input')).toHaveCount(3)
+  // ages suggest a level, but never switch it on their own
+  await expect(page.getByText(/הצעה לפי הגילים:/)).toContainText('רגילה')
   await expectNoHorizontalScroll(page)
   await expectTapTargets(page)
   await snap(page, '01-welcome')
 })
 
 test('full family flow through the interactive missions to "our city"', async ({ page }) => {
-  await page.getByLabel('מבוגר/ת').fill('דנה')
-  await page.getByLabel('ילד/ה ראשון/ה').fill('גיל')
-  await page.getByLabel('ילד/ה שני/ה').fill('רוני')
+  await page.getByRole('radio', { name: /מאתגרת/ }).check()
   await page.getByRole('button', { name: 'מתחילים', exact: true }).click()
 
   // ---- Station 1: story, roles, more, progressive steps, budget, choice, bonus
@@ -68,13 +71,11 @@ test('full family flow through the interactive missions to "our city"', async ({
   await expect(page.getByText('תחנה 1 מתוך 7')).toBeVisible()
   await expect(page.locator('.story-text')).toContainText('בשנת 1910 הוקם כאן הקיוסק הראשון')
   const roles = page.getByRole('region', { name: 'תפקידים בתחנה' })
-  await expect(roles).toContainText('מנווט/ת גיל')
-  await expect(roles).toContainText('חוקר/ת רוני')
-  await expect(roles).toContainText('מציג/ה דנה')
+  await expect(roles.locator('.role-list li')).toHaveText(['נועם ניווט, תיעוד', 'עומרי הקראה, הצגת החלטה', 'אלה חיפוש בשטח'])
   await roles.getByRole('button', { name: 'החלפת תפקידים' }).click()
-  await expect(roles).toContainText('מנווט/ת רוני')
+  await expect(roles.locator('.role-list li').first()).toHaveText('נועם חיפוש בשטח')
 
-  await page.getByRole('button', { name: 'רוצים לדעת יותר?' }).click()
+  // challenge level: the extra reading is already open
   await expect(page.getByText(/קיוסק יכול להיות יותר מחנות/)).toBeVisible()
 
   await expect(page.locator('section.step')).toHaveCount(1)
@@ -100,11 +101,11 @@ test('full family flow through the interactive missions to "our city"', async ({
 
   const decide = step(page, 'החלטה')
   await decide.getByRole('button', { name: /^ילדים/ }).click()
-  await decide.getByLabel('איך הבחירות שלנו עוזרות להם?').fill('צל ומים למי שמשחק')
+  await decide.getByLabel('איך השדרוגים עוזרים?').fill('צל ומים למי שמשחק')
   await decide.getByRole('button', { name: 'דוגמה למחשבה' }).click()
   await expect(decide.getByText('זו רק דוגמה. אין תשובה אחת נכונה.')).toBeVisible()
   await expect(page.getByRole('button', { name: /^לשלב הבא/ })).toHaveCount(0)
-  await expect(page.getByRole('heading', { name: 'בונוס (לא חובה)' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'דילמת בונוס (לא חובה)' })).toBeVisible()
   await page.locator('.bonus').getByLabel('התשובה שלנו').fill('על הספסל')
   await snap(page, '02-station-1')
   await page.getByRole('button', { name: 'סיימנו את התחנה' }).click()
@@ -165,7 +166,8 @@ test('full family flow through the interactive missions to "our city"', async ({
   await expect(page).toHaveURL(/#\/station\/gymnasium$/)
   await expect(page.getByText(/המבנה הישן נהרס ב־1959/)).toBeVisible()
   await expect(page.getByText(/לא מתוכננת כניסה/)).toBeVisible()
-  await step(page, 'חלוקת תפקידים').getByRole('button', { name: 'ענינו בעל פה' }).click()
+  await expect(step(page, 'כרטיסי נקודת מבט')).toContainText('בקבוצה גדולה כמה אנשים מייצגים אותה עמדה')
+  await step(page, 'כרטיסי נקודת מבט').getByRole('button', { name: 'ענינו בעל פה' }).click()
   await nextStep(page)
   const plan = step(page, 'בוחרים תוכנית')
   await plan.getByRole('button', { name: 'רוצים לרשום יתרון וחיסרון?' }).click()
@@ -265,7 +267,8 @@ test('full family flow through the interactive missions to "our city"', async ({
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('כל הכבוד, סיימתם!')
   const card = page.locator('.city-card')
   await expect(card.getByRole('heading', { name: 'העיר שלנו: עיר החולות' })).toBeVisible()
-  await expect(card).toContainText('צוות השדרה')
+  await expect(card).toContainText('הצוות: נועם, עומרי ואלה')
+  await expect(page.locator('.participants-line')).toHaveText('המשתתפים: נועם, עומרי ואלה')
   await expect(card).toContainText('הצללה, ספסל וברז מי שתייה')
   await expect(card).toContainText('קודם צרכים, ואז הגרלה')
   await expect(card).toContainText('שמירת חלק מהמבנה והוספת בנייה חדשה')
@@ -285,7 +288,7 @@ test('full family flow through the interactive missions to "our city"', async ({
   ])
   expect(download.suggestedFilename()).toMatch(/^our-city-\d{4}-\d{2}-\d{2}\.txt$/)
   const text = readFileSync((await download.path())!, 'utf8')
-  expect(text).toContain('הצוות: דנה, גיל ורוני')
+  expect(text).toContain('משתתפים: נועם, עומרי ואלה')
   expect(text).toContain('הושלמו 7 מתוך 7')
   expect(text).toContain('התחנה האהובה: בית עקיבא אריה ויס')
   expect(text).toContain('אנחנו, צוות השדרה, מקימים את העיר עיר החולות.')
@@ -305,15 +308,29 @@ test('full family flow through the interactive missions to "our city"', async ({
   await expect(page.getByLabel('דבר ראשון')).toHaveValue('')
 })
 
-test('light route hides the extra reading and bonus tasks', async ({ page }) => {
-  await page.getByRole('radio', { name: /מסלול קליל/ }).check()
+test('light level shows fewer steps and more explanation, and the level can change mid-route', async ({ page }) => {
+  await page.getByRole('radio', { name: /קלילה/ }).check()
   await page.getByRole('button', { name: 'מתחילים', exact: true }).click()
-  await expect(page.locator('.story-text')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'רוצים לדעת יותר?' })).toHaveCount(0)
+  // the observation step is skipped at the light level
+  await expect(page.locator('section.step h3').first()).toContainText('אתגר תקציב')
+  await step(page, 'אתגר תקציב').getByRole('button', { name: /^הצללה/ }).click()
   await nextStep(page)
-  await nextStep(page)
-  await expect(page.locator('section.step')).toHaveCount(3)
-  await expect(page.getByRole('heading', { name: 'בונוס (לא חובה)' })).toHaveCount(0)
+  await expect(page.locator('section.step')).toHaveCount(2)
+  await expect(page.getByRole('button', { name: /^לשלב הבא/ })).toHaveCount(0)
+  await expect(page.getByText('זו רק דוגמה. אין תשובה אחת נכונה.')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'דילמת בונוס (לא חובה)' })).toHaveCount(0)
+
+  // switch to regular on the station: the extra step appears, the answer stays
+  const levels = page.getByRole('group', { name: 'רמת הפעילות' })
+  await levels.getByRole('button', { name: 'רגילה' }).click()
+  await expect(page.locator('section.step h3').first()).toContainText('חיפוש ראיות')
+  await expect(step(page, 'אתגר תקציב').getByRole('button', { name: /^הצללה/ })).toHaveAttribute('aria-pressed', 'true')
+  await levels.getByRole('button', { name: 'מאתגרת' }).click()
+  await page.reload()
+  await expect(page.getByRole('group', { name: 'רמת הפעילות' }).getByRole('button', { name: 'מאתגרת' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
 })
 
 test('navigation links open Google Maps walking directions with Hebrew queries', async ({ page }) => {

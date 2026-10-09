@@ -9,6 +9,7 @@ export type Screen =
   | { name: 'stations' }
   | { name: 'finish' }
   | { name: 'about' }
+  | { name: 'group' }
 
 export function parseHash(hash: string): Screen {
   const path = hash.replace(/^#\/?/, '').split('?')[0]
@@ -28,6 +29,8 @@ export function parseHash(hash: string): Screen {
       return { name: 'finish' }
     case 'about':
       return { name: 'about' }
+    case 'group':
+      return { name: 'group' }
     default:
       return { name: 'welcome' }
   }
