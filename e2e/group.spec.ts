@@ -7,6 +7,13 @@ import { readFileSync } from 'node:fs'
 const step = (page: Page, title: string) =>
   page.locator('section.step').filter({ has: page.locator('h3', { hasText: title }) })
 const nextStep = (page: Page) => page.getByRole('button', { name: /^לשלב הבא/ }).click()
+
+/** The tests below are about missions: continue with the written story when the discovery card asks. */
+async function readStory(page: Page) {
+  const choice = page.getByRole('button', { name: 'ממשיכים עם הסיפור הכתוב' })
+  await choice.or(page.locator('section.mission')).first().waitFor()
+  if (await choice.isVisible()) await choice.click()
+}
 const roleItems = (page: Page) => page.getByRole('region', { name: 'תפקידים בתחנה' }).locator('.role-list li')
 
 async function expectFits(page: Page) {
@@ -41,6 +48,7 @@ test('one participant: personal wording, no roles, "העיר שלי"', async ({ 
   await expect(page.getByText(/משחק\/ת לבד/).first()).toBeVisible()
   await expect(page.getByText(/המשימה: לתכנן עיר חדשה/)).toBeVisible()
   await page.getByRole('button', { name: 'מתחילים', exact: true }).click()
+  await readStory(page)
 
   await expect(page.getByRole('region', { name: 'איך משחקים בתחנה' })).toContainText('עוברים על כל השלבים בקצב שלך')
   await expect(page.getByRole('region', { name: 'תפקידים בתחנה' })).toHaveCount(0)
@@ -50,9 +58,11 @@ test('one participant: personal wording, no roles, "העיר שלי"', async ({ 
   await expectFits(page)
 
   await page.goto('./#/station/gymnasium')
+  await readStory(page)
   await expect(step(page, 'כרטיסי נקודת מבט')).toContainText('עוברים על כל הכרטיסים')
 
   await page.goto('./#/station/independence-hall')
+  await readStory(page)
   await nextStep(page)
   await nextStep(page)
   await step(page, 'המגילה').getByLabel('השם שלי').fill('רוני')
@@ -70,6 +80,7 @@ test('two participants: several roles each, swapped at the next station', async 
   await setPeople(page, ['דנה', 'גיל'])
   await expect(page.getByText(/כל אחד מקבל כמה תפקידים/)).toBeVisible()
   await page.getByRole('button', { name: 'מתחילים', exact: true }).click()
+  await readStory(page)
   await expect(roleItems(page)).toHaveText(['דנה ניווט, חיפוש בשטח, הצגת החלטה', 'גיל הקראה, תיעוד'])
   await page.getByRole('button', { name: 'סיימנו את התחנה' }).click()
   await expect(roleItems(page)).toHaveText(['דנה הקראה, תיעוד', 'גיל ניווט, חיפוש בשטח, הצגת החלטה'])
@@ -79,6 +90,7 @@ test('two participants: several roles each, swapped at the next station', async 
 test('five participants: one role each, rotating, with a manual change', async ({ page }) => {
   await setPeople(page, ['א1', 'ב2', 'ג3', 'ד4', 'ה5'])
   await page.getByRole('button', { name: 'מתחילים', exact: true }).click()
+  await readStory(page)
   await expect(roleItems(page)).toHaveText(['א1 ניווט', 'ב2 הקראה', 'ג3 חיפוש בשטח', 'ד4 תיעוד', 'ה5 הצגת החלטה'])
   await page.getByRole('button', { name: 'שינוי חלוקה ידני' }).click()
   await page.getByRole('combobox', { name: /^ניווט/ }).selectOption({ label: 'ה5' })
@@ -97,6 +109,7 @@ test('eight participants: one group with free helpers, or teams on one device wi
 
   // one group: five roles, the rest join freely
   await page.getByRole('button', { name: 'מתחילים', exact: true }).click()
+  await readStory(page)
   await expect(roleItems(page)).toHaveCount(5)
   await expect(page.getByText(/שאר הקבוצה מצטרפים לחיפוש ולדיון/)).toBeVisible()
   await nextStep(page)
@@ -111,6 +124,7 @@ test('eight participants: one group with free helpers, or teams on one device wi
   await expect(page.locator('.team-list li')).toHaveText(['צוות א: 4 משתתפים', 'צוות ב: 4 משתתפים'])
   await expectFits(page)
   await page.getByRole('link', { name: 'חזרה לתחנה' }).click()
+  await readStory(page)
 
   const teamSwitch = page.getByRole('group', { name: 'הצוות שעונה עכשיו במכשיר:' })
   await expect(teamSwitch.getByRole('button', { name: 'צוות א' })).toHaveAttribute('aria-pressed', 'true')
@@ -147,14 +161,17 @@ test('eight participants: one group with free helpers, or teams on one device wi
   await page.goto('./#/group')
   await page.getByRole('radio', { name: 'קבוצה אחת' }).check()
   await page.goto('./#/station/kiosk')
+  await readStory(page)
   await expect(step(page, 'אתגר תקציב').getByRole('button', { name: /^הצללה/ })).toHaveAttribute('aria-pressed', 'true')
 })
 
 test('editing the group mid-route keeps answers, updates roles and survives a refresh', async ({ page }) => {
   await setPeople(page, ['דנה', 'גיל', 'רוני'])
   await page.getByRole('button', { name: 'מתחילים', exact: true }).click()
+  await readStory(page)
   await page.getByRole('button', { name: 'סיימנו את התחנה' }).click()
   await page.getByRole('button', { name: 'סיימנו את התחנה' }).click()
+  await readStory(page)
   // station 3, three people
   const match = step(page, 'מי גר איפה?')
   await expect(match).toContainText('פתרו יחד')
@@ -169,8 +186,10 @@ test('editing the group mid-route keeps answers, updates roles and survives a re
   await expect(page.getByText(/הצעה לפי הגילים:/)).toContainText('קלילה')
   await expect(page.getByRole('radio', { name: /רגילה/ })).toBeChecked()
   await page.getByRole('link', { name: 'חזרה לתחנה' }).click()
+  await readStory(page)
 
   await expect(page).toHaveURL(/#\/station\/weiss-house$/)
+  await readStory(page)
   await expect(roleItems(page)).not.toContainText(['רוני'])
   await expect(page.getByRole('region', { name: 'תפקידים בתחנה' })).toContainText('מאיה')
   await expect(step(page, 'מי גר איפה?').getByRole('group', { name: /משפחת שקט/ }).getByRole('button', { name: 'מגרש ב' })).toHaveAttribute(
@@ -212,6 +231,7 @@ test('with no names typed, the end screens never show placeholder names', async 
 test('switching level never hides a step that already has an answer', async ({ page }) => {
   await page.getByRole('radio', { name: /קלילה/ }).check()
   await page.getByRole('button', { name: 'מתחילים', exact: true }).click()
+  await readStory(page)
   await step(page, 'אתגר תקציב').getByRole('button', { name: /^הצללה/ }).click()
   await page.getByRole('group', { name: 'רמת הפעילות' }).getByRole('button', { name: 'רגילה' }).click()
   await expect(page.locator('section.step h3')).toHaveText([/חיפוש ראיות/, /אתגר תקציב/])
@@ -226,6 +246,7 @@ test('removing a team that has answers warns first, and its answers still show a
   await page.getByRole('radio', { name: 'צוותים של 2–4' }).check()
   await expect(page.locator('.team-list li')).toHaveCount(3)
   await page.getByRole('button', { name: 'מתחילים', exact: true }).click()
+  await readStory(page)
   await page.getByRole('group', { name: 'הצוות שעונה עכשיו במכשיר:' }).getByRole('button', { name: 'צוות ג' }).click()
   await nextStep(page)
   await step(page, 'אתגר תקציב').getByRole('button', { name: /^הצללה/ }).click()
@@ -244,6 +265,7 @@ test('removing a team that has answers warns first, and its answers still show a
   await page.goto('./#/group')
   await page.getByRole('button', { name: 'יותר צוותים' }).click()
   await page.goto('./#/station/kiosk')
+  await readStory(page)
   await page.getByRole('group', { name: 'הצוות שעונה עכשיו במכשיר:' }).getByRole('button', { name: 'צוות ג' }).click()
   await expect(step(page, 'אתגר תקציב').getByRole('button', { name: /^הצללה/ })).toHaveAttribute('aria-pressed', 'true')
 })

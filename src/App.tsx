@@ -14,6 +14,7 @@ import { StationsScreen } from './screens/StationsScreen'
 import { WelcomeScreen } from './screens/WelcomeScreen'
 
 const route = getRoute(defaultRouteId)
+const SCROLL_KEY = 'shdera:scroll'
 
 export default function App() {
   const hash = useHash()
@@ -40,6 +41,32 @@ export default function App() {
     window.scrollTo(0, 0)
     requestAnimationFrame(() => document.getElementById('screen-title')?.focus({ preventScroll: true }))
   }, [hash, screenTitle])
+
+  // Coming back from another app (or after the browser reloads the tab): return
+  // to the same scroll position on the same screen. Session-only, best effort.
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(SCROLL_KEY) ?? 'null') as { hash: string; y: number } | null
+      if (saved && saved.hash === window.location.hash && saved.y > 0)
+        requestAnimationFrame(() => window.scrollTo(0, saved.y))
+    } catch {
+      // storage unavailable: start at the top
+    }
+    const remember = () => {
+      try {
+        sessionStorage.setItem(SCROLL_KEY, JSON.stringify({ hash: window.location.hash, y: Math.round(window.scrollY) }))
+      } catch {
+        // ignore
+      }
+    }
+    const onVisibility = () => document.visibilityState === 'hidden' && remember()
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pagehide', remember)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pagehide', remember)
+    }
+  }, [])
 
   const voice = makeVoice(trail.group.participants.length, trail.teams)
 

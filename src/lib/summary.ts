@@ -1,7 +1,7 @@
 import type { Route } from '../content'
 import { TEAM_LETTERS, teamMembers, teamsActive, type GroupSettings, type Participant } from './group'
 import { cityPlan, summarizeStep } from './plan'
-import { bonusKey, namesLine, scopedResponses, type Progress, type Responses, type StationStatus } from './progress'
+import { bonusKey, discoverKey, namesLine, scopedResponses, type Progress, type Responses, type StationStatus } from './progress'
 
 const STATUS_TEXT: Record<StationStatus, string> = {
   pending: 'טרם ביקרנו',
@@ -26,6 +26,18 @@ export function formatIsoDate(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number)
   if (!y || !m || !d) return iso
   return formatHebrewDate(new Date(y, m - 1, d))
+}
+
+/** How the group took in a station's story, and the detail they shared. */
+export function discoverLine(responses: Responses, stationId: string, solo: boolean): string | null {
+  const r = responses[discoverKey(stationId)]
+  if (!r?.discover) return null
+  if (r.discover === 'text') return 'הסיפור הכתוב'
+  const share = r.text?.share?.trim()
+  const how = solo ? 'צפיתי או האזנתי באפליקציה הרשמית' : 'צפינו או האזנו באפליקציה הרשמית'
+  if (share) return `${how}. ${solo ? 'מה גיליתי' : 'מה גילינו'}: ${share}`
+  if (r.aloud) return `${how}, ו${solo ? 'עניתי בעל פה' : 'שיתפנו בעל פה'}`
+  return how
 }
 
 const indent = (text: string, by = '   ') => text.split('\n').map((l) => `${by}${l}`)
@@ -84,7 +96,8 @@ export interface Board {
  * removed (fewer teams, or teams switched off), still get their own card.
  */
 export function boards(group: GroupSettings, progress: Progress): Board[] {
-  const has = (r: Responses) => Object.keys(r).length > 0
+  // Discovery answers are shared by everyone, so they never make a board of their own.
+  const has = (r: Responses) => Object.keys(r).some((k) => !k.endsWith(':discover'))
   const active = teamsActive(group)
   const activeIds = active ? group.teams.map((t) => t.id) : []
   const result: Board[] = []
@@ -145,6 +158,8 @@ function answersBlock(route: Route, progress: Progress, responses: Responses, so
         for (const a of answers) lines.push(...indent(a, '     '))
       }
     }
+    const discovered = discoverLine(progress.responses, station.id, solo)
+    if (discovered) lines.push(`   מגלים את הסיפור: ${discovered}`)
     const bonus = responses[bonusKey(station.id)]
     const bonusText = bonus?.text?.answer?.trim()
     if (bonusText || bonus?.aloud) lines.push(`   בונוס: ${bonusText || (solo ? 'עניתי בעל פה' : 'ענינו בעל פה')}`)

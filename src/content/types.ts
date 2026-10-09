@@ -182,9 +182,36 @@ export interface Mission {
   soloBonus?: string
 }
 
+/**
+ * How a station's story can be watched or heard.
+ *  - manual:   the group switches to the official app themselves (no link we
+ *              can promise opens the right station).
+ *  - external: a verified link to the clip, opened in a new tab.
+ *  - video / audio: a verified file or embed we are allowed to play in the game.
+ * Never invent URLs, and never copy or extract files from the official app.
+ */
+export type MediaKind = 'manual' | 'external' | 'video' | 'audio'
+
+export interface StationMedia {
+  kind: MediaKind
+  /** Name to look for in the official app. */
+  appStationName: string
+  /** Short question to keep in mind while watching or listening. */
+  prepQuestion: string
+  /** Verified URL. Required for external, video and audio; unused for manual. */
+  url?: string
+  /** Who made it and the permission to use it. Shown next to any player or link. */
+  credit?: string
+  license?: string
+  /** Text version of the clip, if one is provided. */
+  transcript?: string
+}
+
 export interface Station {
   id: string
   name: string
+  /** Number of this stop on the official 10-station trail (and its map). */
+  officialNumber?: number
   /** One of the city themes, e.g. "מקום מפגש". */
   theme: string
   address: string
@@ -198,6 +225,8 @@ export interface Station {
   /** "רוצים לדעת יותר?" */
   more: Paragraph[]
   mission: Mission
+  /** Optional official video / narration for this station. */
+  media?: StationMedia
   note?: string
   visitType?: VisitType
   siteStatus?: SiteStatus
@@ -246,6 +275,23 @@ export interface Route {
   levels: Level[]
   /** Where the activity starts (a public place). */
   startPoint: string
+  /** Illustrated trail map, bundled with the app so it also works offline. */
+  map?: {
+    src: string
+    width: number
+    height: number
+    alt: string
+    caption: string
+    /** Who made the map and the permission to use it, once known. */
+    credit?: string
+  }
+  /** The official trail app, used for the video and narration of each station. */
+  officialApp?: {
+    name: string
+    /** Store page only. It installs the app; it does not open a station. */
+    storeUrl: string
+    storeLabel: string
+  }
   reminders: string[]
   roles: Role[]
   stations: Station[]

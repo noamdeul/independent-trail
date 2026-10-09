@@ -77,6 +77,11 @@ export function WelcomeScreen({ route, trail }: { route: Route; trail: Trail }) 
           </h2>
           <p>{route.startPoint}</p>
           <p className="muted small">התחנה הראשונה: {first.name}.</p>
+          {route.map && (
+            <a className="small tap-link" href={hrefFor({ name: 'stations' })}>
+              למפת השביל ולרשימת התחנות
+            </a>
+          )}
         </section>
 
         <section className="card reminders" aria-labelledby="reminders-title">
