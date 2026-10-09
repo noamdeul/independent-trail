@@ -14,7 +14,8 @@ import type {
   Step,
 } from '../content'
 import { budgetCost, budgetSelection, charterSuggestions, charterText, charterValues, cityPlan, findStep } from '../lib/plan'
-import type { Progress, StepResponse } from '../lib/progress'
+import type { Responses, StepResponse } from '../lib/progress'
+import { fieldLabel, stepPrompt, useVoice } from '../lib/voice'
 import type { Trail } from '../lib/useTrail'
 import { Disclosure } from './Disclosure'
 import { IconBulb, IconCheck, IconEye, IconPencil } from './Icons'
@@ -76,10 +77,11 @@ function Fields({ trail, step, r, fields }: { trail: Trail; step: Step; r: StepR
   const keep = fields.filter((f) => f.plan)
   const hasText = talk.some((f) => (r.text?.[f.id] ?? '').trim())
   const [writing, setWriting] = useState(hasText)
+  const { solo } = useVoice()
   const input = (f: Field) => (
     <TextField
       key={f.id}
-      label={f.label}
+      label={fieldLabel(f, solo)}
       long={f.long}
       value={r.text?.[f.id] ?? ''}
       onChange={(v) => trail.setText(step.id, f.id, v)}
@@ -94,7 +96,7 @@ function Fields({ trail, step, r, fields }: { trail: Trail; step: Step; r: StepR
           <div className="talk">
             <ul className="bullets">
               {talk.map((f) => (
-                <li key={f.id}>{f.label}</li>
+                <li key={f.id}>{fieldLabel(f, solo)}</li>
               ))}
             </ul>
             <button type="button" className="btn btn-small btn-soft" onClick={() => setWriting(true)}>
@@ -108,7 +110,9 @@ function Fields({ trail, step, r, fields }: { trail: Trail; step: Step; r: StepR
   )
 }
 
-export function AloudToggle({ pressed, onToggle, label = 'ענינו בעל פה' }: { pressed: boolean; onToggle: () => void; label?: string }) {
+export function AloudToggle({ pressed, onToggle, label }: { pressed: boolean; onToggle: () => void; label?: string }) {
+  const { t } = useVoice()
+  label ??= t('ענינו בעל פה', 'עניתי בעל פה')
   return (
     <button type="button" className={`toggle${pressed ? ' toggle-on' : ''}`} aria-pressed={pressed} onClick={onToggle}>
       <span className="toggle-box" aria-hidden="true">
@@ -187,6 +191,8 @@ function CardButton({
 // ---------------------------------------------------------------- step kinds
 
 function Observe({ trail, step, r }: StepProps<ObserveStep>) {
+  const { t } = useVoice()
+  const notFoundLabel = t('לא מצאנו', 'לא מצאתי')
   return (
     <ul className="observe">
       {step.items.map((item, i) => {
@@ -197,11 +203,11 @@ function Observe({ trail, step, r }: StepProps<ObserveStep>) {
             <TextField
               label={item}
               value={r.text?.[key] ?? ''}
-              placeholder={notFound ? 'לא מצאנו' : 'מה ראיתם?'}
+              placeholder={notFound ? notFoundLabel : t('מה ראיתם?', 'מה רואים?')}
               onChange={(v) => trail.setText(step.id, key, v)}
             />
             <AloudToggle
-              label="לא מצאנו"
+              label={notFoundLabel}
               pressed={notFound}
               onToggle={() =>
                 trail.respond(step.id, (prev) => {
@@ -239,7 +245,7 @@ function SeeThink({ trail, step, r }: StepProps<SeeThinkStep>) {
   )
 }
 
-function Budget({ trail, step, r, progress }: StepProps<BudgetStep> & { progress: Progress }) {
+function Budget({ trail, step, r, responses }: StepProps<BudgetStep> & { responses: Responses }) {
   if (step.announcement && !r.announced) {
     return (
       <button type="button" className="btn btn-reveal" onClick={() => trail.respond(step.id, { announced: true })}>
@@ -248,7 +254,7 @@ function Budget({ trail, step, r, progress }: StepProps<BudgetStep> & { progress
       </button>
     )
   }
-  const selected = budgetSelection(step, progress.responses)
+  const selected = budgetSelection(step, responses)
   const used = budgetCost(step, selected)
   const left = step.budget - used
   const toggle = (id: string) => {
@@ -294,7 +300,7 @@ function Budget({ trail, step, r, progress }: StepProps<BudgetStep> & { progress
   )
 }
 
-function Choice({ route, trail, step, r, progress, stationId }: StepProps<ChoiceStep> & { progress: Progress; stationId: string }) {
+function Choice({ route, trail, step, r, responses, stationId }: StepProps<ChoiceStep> & { responses: Responses; stationId: string }) {
   const selected = r.selected ?? []
   const full = step.max > 1 && selected.length >= step.max
   const toggle = (id: string) => {
@@ -302,14 +308,14 @@ function Choice({ route, trail, step, r, progress, stationId }: StepProps<Choice
     const next = step.max === 1 ? (on ? [] : [id]) : on ? selected.filter((s) => s !== id) : [...selected, id]
     trail.respond(step.id, { selected: next })
   }
-  const plan = step.showPlan ? cityPlan(route, progress, { includeCharter: false }).filter((s) => s.station.id !== stationId) : []
+  const plan = step.showPlan ? cityPlan(route, responses, { includeCharter: false }).filter((s) => s.station.id !== stationId) : []
   const perOptionFilled = step.options.some((o) => step.perOption?.some((f) => (r.text?.[`${o.id}:${f.id}`] ?? '').trim()))
   const [writing, setWriting] = useState(perOptionFilled)
   return (
     <div className="choice">
       {step.showPlan && (
         <div className="plan-reminder">
-          <p className="plan-reminder-title">מה שמרתם עד עכשיו</p>
+          <p className="plan-reminder-title">מה נשמר עד עכשיו</p>
           {plan.length === 0 ? (
             <p className="muted small">עוד לא נשמרו החלטות. אפשר לבחור עקרונות גם כך, או לחזור לתחנות.</p>
           ) : (
@@ -567,10 +573,11 @@ export function drawLottery(items: string[], targets: string[]): Record<string, 
   return Object.fromEntries(items.map((id, i) => [id, pool[i % pool.length]]))
 }
 
-function Lottery({ route, trail, step, r, progress }: StepProps<LotteryStep> & { progress: Progress }) {
+function Lottery({ route, trail, step, r, responses }: StepProps<LotteryStep> & { responses: Responses }) {
   const match = findStep(route, step.from)
   if (match?.kind !== 'match') return null
-  const ours = progress.responses[match.id]?.assign ?? {}
+  const ours = responses[match.id]?.assign ?? {}
+  const { t } = useVoice()
   const label = (id?: string) => match.targets.find((t) => t.id === id)?.label ?? '—'
   const draw = () =>
     trail.respond(step.id, {
@@ -591,7 +598,7 @@ function Lottery({ route, trail, step, r, progress }: StepProps<LotteryStep> & {
           <thead>
             <tr>
               <th scope="col">משפחה</th>
-              <th scope="col">החלוקה שלנו</th>
+              <th scope="col">{t('החלוקה שלנו', 'החלוקה שלי')}</th>
               <th scope="col">ההגרלה</th>
             </tr>
           </thead>
@@ -611,9 +618,10 @@ function Lottery({ route, trail, step, r, progress }: StepProps<LotteryStep> & {
   )
 }
 
-function Charter({ route, trail, step, r, progress }: StepProps<CharterStep> & { progress: Progress }) {
-  const s = charterSuggestions(route, progress, step)
-  const values = charterValues(route, progress, step)
+function Charter({ route, trail, step, r, responses }: StepProps<CharterStep> & { responses: Responses }) {
+  const { solo } = useVoice()
+  const s = charterSuggestions(route, responses, step)
+  const values = charterValues(route, responses, step)
   const field = (key: 'team' | 'city' | 'build' | 'preserve' | 'divide', label: string, suggestion = '') => (
     <div>
       <TextField label={label} value={r.text?.[key] ?? ''} onChange={(v) => trail.setText(step.id, key, v)} />
@@ -624,7 +632,7 @@ function Charter({ route, trail, step, r, progress }: StepProps<CharterStep> & {
   return (
     <div className="charter">
       <div className="fields">
-        {field('team', 'שם הצוות')}
+        {field('team', solo ? 'השם שלי' : 'שם הצוות')}
         {field('city', 'שם העיר')}
         <p className="small">
           <strong>העקרונות שבחרתם:</strong> {principles.length ? principles.join(' · ') : 'עוד לא נבחרו (שלב ב).'}
@@ -634,7 +642,7 @@ function Charter({ route, trail, step, r, progress }: StepProps<CharterStep> & {
         {field('divide', 'איך נחליט על חלוקה', s.divide)}
       </div>
       <blockquote className="charter-doc" aria-label="מגילת העיר">
-        {charterText(values)
+        {charterText(values, solo)
           .split('\n')
           .map((line) => (
             <p key={line}>{line}</p>
@@ -661,8 +669,10 @@ export function StepCard({
   stationId: string
   planTitle: string
 }) {
-  const { progress } = trail
-  const r = progress.responses[step.id] ?? {}
+  const { responses, group } = trail
+  const { solo, t } = useVoice()
+  const light = group.level === 'light'
+  const r = responses[step.id] ?? {}
   const props = { route, trail, r }
   const titleId = `${step.id}-title`
   return (
@@ -676,7 +686,7 @@ export function StepCard({
           {step.title}
         </span>
       </h3>
-      <p className="step-prompt">{step.prompt}</p>
+      <p className="step-prompt">{stepPrompt(step, solo)}</p>
       {step.bullets && (
         <ul className="bullets">
           {step.bullets.map((b) => (
@@ -687,26 +697,30 @@ export function StepCard({
 
       {step.kind === 'observe' && <Observe {...props} step={step} />}
       {step.kind === 'seeThink' && <SeeThink {...props} step={step} />}
-      {step.kind === 'budget' && <Budget {...props} step={step} progress={progress} />}
-      {step.kind === 'choice' && <Choice {...props} step={step} progress={progress} stationId={stationId} />}
+      {step.kind === 'budget' && <Budget {...props} step={step} responses={responses} />}
+      {step.kind === 'choice' && <Choice {...props} step={step} responses={responses} stationId={stationId} />}
       {step.kind === 'categorize' && <Categorize {...props} step={step} />}
       {step.kind === 'order' && <Order {...props} step={step} />}
       {step.kind === 'match' && <Match {...props} step={step} />}
-      {step.kind === 'lottery' && <Lottery {...props} step={step} progress={progress} />}
-      {step.kind === 'charter' && <Charter {...props} step={step} progress={progress} />}
+      {step.kind === 'lottery' && <Lottery {...props} step={step} responses={responses} />}
+      {step.kind === 'charter' && <Charter {...props} step={step} responses={responses} />}
 
       {step.fields && step.fields.length > 0 && <Fields trail={trail} step={step} r={r} fields={step.fields} />}
 
       {step.fallback && <p className="fallback">{step.fallback}</p>}
 
       {step.hints && (
-        <Hints hints={step.hints} shown={r.hints ?? 0} onShow={() => trail.respond(step.id, { hints: (r.hints ?? 0) + 1 })} />
+        <Hints
+          hints={step.hints}
+          shown={Math.max(r.hints ?? 0, light ? 1 : 0)}
+          onShow={() => trail.respond(step.id, { hints: Math.max(r.hints ?? 0, light ? 1 : 0) + 1 })}
+        />
       )}
       {step.solution && (
         <Solution text={step.solution} shown={!!r.solved} onShow={() => trail.respond(step.id, { solved: true })} />
       )}
       {step.example && (
-        <Disclosure label="דוגמה למחשבה" openLabel="הסתרת הדוגמה" icon={<IconBulb size={18} />}>
+        <Disclosure label="דוגמה למחשבה" openLabel="הסתרת הדוגמה" icon={<IconBulb size={18} />} defaultOpen={light}>
           <p>{step.example}</p>
           <p className="muted small">זו רק דוגמה. אין תשובה אחת נכונה.</p>
         </Disclosure>
@@ -714,7 +728,7 @@ export function StepCard({
 
       <div className="step-foot">
         <AloudToggle
-          label={step.kind === 'charter' ? 'הקראנו יחד' : 'ענינו בעל פה'}
+          label={step.kind === 'charter' ? t('הקראנו יחד', 'הקראתי') : t('ענינו בעל פה', 'עניתי בעל פה')}
           pressed={!!r.aloud}
           onToggle={() => trail.respond(step.id, { aloud: !r.aloud })}
         />

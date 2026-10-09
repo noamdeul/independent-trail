@@ -58,6 +58,9 @@ export function StationsScreen({ route, trail }: { route: Route; trail: Trail })
         })}
       </ol>
 
+      <a className="btn btn-ghost" href={hrefFor({ name: 'group' })}>
+        עריכת המשתתפים והרמה
+      </a>
       <a className="btn btn-secondary" href={hrefFor({ name: 'finish' })}>
         למסך הסיום
       </a>

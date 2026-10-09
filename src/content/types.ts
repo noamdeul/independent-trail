@@ -33,8 +33,10 @@ export interface Field {
   label: string
   /** Multi-line answer (a short story etc.). */
   long?: boolean
-  /** Goes into the family city plan. */
+  /** Goes into the city plan. */
   plan?: boolean
+  /** Label used when one person plays alone. */
+  soloLabel?: string
 }
 
 export interface Option {
@@ -52,6 +54,10 @@ interface StepBase {
   id: string
   title: string
   prompt: string
+  /** Prompt for a single player, when the group prompt assumes conversation. */
+  soloPrompt?: string
+  /** Hidden at the "light" level. */
+  advanced?: boolean
   bullets?: string[]
   /** Two graded hints, only for closed tasks. */
   hints?: [string, string]
@@ -171,7 +177,9 @@ export interface Mission {
   /** Shown above the steps when the scenario is fictional. */
   scenario?: string
   steps: Step[]
+  /** Optional bonus dilemma, shown at the "challenge" level. */
   bonus: string
+  soloBonus?: string
 }
 
 export interface Station {
@@ -211,11 +219,18 @@ export interface Role {
   description: string
 }
 
-export interface RouteMode {
-  id: 'full' | 'light'
+export type LevelId = 'light' | 'regular' | 'challenge'
+
+export interface Level {
+  id: LevelId
   label: string
   duration: string
   description: string
+}
+
+export interface ParticipantSeed {
+  name: string
+  age?: number
 }
 
 export interface Route {
@@ -225,9 +240,10 @@ export interface Route {
   frame: {
     title: string
     text: string
+    soloText: string
     disclaimer: string
   }
-  modes: RouteMode[]
+  levels: Level[]
   /** Where the activity starts (a public place). */
   startPoint: string
   reminders: string[]
@@ -242,9 +258,6 @@ export interface Route {
     unverified: string[]
     contentCheckedOn: string
   }
-  /** Generic labels shown when a name field is left empty. */
-  nameFallbacks: {
-    parent: string
-    kids: [string, string]
-  }
+  /** Editable starting list of participants. */
+  defaultParticipants: ParticipantSeed[]
 }

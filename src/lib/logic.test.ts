@@ -5,18 +5,29 @@ import { drawLottery } from '../components/steps'
 import { walkingDirectionsUrl } from './maps'
 import { budgetCost, budgetSelection, charterText, charterValues, cityPlan, findCharterStep, findStep, joinHebrew } from './plan'
 import {
+  assignRoles,
+  autoTeams,
+  defaultGroup,
+  normalizeGroup,
+  repairTeams,
+  rolesByPerson,
+  suggestLevel,
+  teamsActive,
+  type GroupSettings,
+  type Participant,
+} from './group'
+import {
   bonusKey,
   createProgress,
-  displayNames,
-  familyLine,
   isStepAnswered,
-  loadNames,
   loadProgress,
+  namesLine,
   nextStationId,
   normalizeProgress,
   resumeStationId,
-  rolesFor,
   saveProgress,
+  scopedResponses,
+  visibleSteps,
   type Progress,
   type StepResponse,
 } from './progress'
@@ -25,7 +36,12 @@ import { stationNotices } from './siteStatus'
 import { createStorage } from './storage'
 import { buildSummary } from './summary'
 
-const names = { parent: 'דנה', kids: ['גיל', 'רוני'] as [string, string] }
+const people = (n: number): Participant[] => Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: `שם${i + 1}` }))
+const groupOf = (n: number, extra: Partial<GroupSettings> = {}): GroupSettings => ({
+  ...defaultGroup(route),
+  participants: people(n),
+  ...extra,
+})
 const allSteps: Step[] = route.stations.flatMap((s) => s.mission.steps)
 
 function withStatus(p: Progress, id: string, status: 'done' | 'skipped' | 'pending'): Progress {
@@ -168,13 +184,13 @@ describe('city plan and charter', () => {
       's7-principles': { selected: ['fair', 'play', 'voice'] },
       's7-charter': { text: { team: 'השדרה', city: 'עיר החולות' } },
     })
-    const plan = cityPlan(route, p, { includeCharter: false })
+    const plan = cityPlan(route, p.responses, { includeCharter: false })
     const byStation = Object.fromEntries(plan.map((s) => [s.station.id, s.lines]))
     expect(byStation.kiosk).toEqual(['הצללה וברז מי שתייה', 'ילדים', 'צל ומים לילדים'])
     expect(byStation.mosaic).toEqual(['יום פתיחת הגינה'])
     expect(byStation['dizengoff-statue']).toEqual(['גינה ומגרש משחקים וספרייה', 'הגינה'])
 
-    const text = charterText(charterValues(route, p, charterStep))
+    const text = charterText(charterValues(route, p.responses, charterStep))
     expect(text).toBe(
       [
         'אנחנו, צוות השדרה, מקימים את העיר עיר החולות.',
@@ -185,7 +201,7 @@ describe('city plan and charter', () => {
   })
 
   it('leaves blanks instead of inventing answers', () => {
-    const text = charterText(charterValues(route, createProgress(route), charterStep))
+    const text = charterText(charterValues(route, createProgress(route).responses, charterStep))
     expect(text.match(/______/g)?.length).toBe(8)
   })
 
@@ -194,12 +210,12 @@ describe('city plan and charter', () => {
       's3-rule': { selected: ['lottery'] },
       's7-charter': { text: { divide: 'צדפים, כמו ב־1909' } },
     })
-    expect(charterValues(route, p, charterStep).divide).toBe('צדפים, כמו ב־1909')
+    expect(charterValues(route, p.responses, charterStep).divide).toBe('צדפים, כמו ב־1909')
   })
 
   it('uses the typed rule when "another idea" is picked', () => {
     const p = withResponses(createProgress(route), { 's3-rule': { selected: ['other'], text: { rule: 'כל אחד בתורו' } } })
-    expect(charterValues(route, p, charterStep).divide).toBe('כל אחד בתורו')
+    expect(charterValues(route, p.responses, charterStep).divide).toBe('כל אחד בתורו')
   })
 })
 
@@ -220,15 +236,6 @@ describe('progress', () => {
     expect(resumeStationId(route, p)).toBe('weiss-house')
     p = withStatus(p, 'weiss-house', 'done')
     expect(resumeStationId(route, p)).toBe('kiosk')
-  })
-
-  it('rotates three roles between the kids and the parent, with a manual shift', () => {
-    const p = createProgress(route)
-    const at = (id: string, prog = p) => rolesFor(route, prog, names, id).map((r) => `${r.label}:${r.name}`)
-    expect(at('kiosk')).toEqual(['מנווט/ת:גיל', 'חוקר/ת:רוני', 'מציג/ה:דנה'])
-    expect(at('mosaic')).toEqual(['מנווט/ת:רוני', 'חוקר/ת:דנה', 'מציג/ה:גיל'])
-    const shifted = { ...p, stations: { ...p.stations, kiosk: { ...p.stations.kiosk, roleShift: 1 } } }
-    expect(at('kiosk', shifted)).toEqual(['מנווט/ת:רוני', 'חוקר/ת:דנה', 'מציג/ה:גיל'])
   })
 
   it('counts "answered out loud" as an answer', () => {
@@ -254,7 +261,7 @@ describe('progress', () => {
         'not-a-step': { aloud: true },
       },
     })
-    expect(odd.mode).toBe('light')
+    expect(odd.version).toBe(3)
     expect(odd.currentStationId).toBeNull()
     expect(odd.stations.kiosk).toEqual({ status: 'pending', stepsOpen: 3, roleShift: 0 })
     expect(odd.stations).not.toHaveProperty('ghost')
@@ -288,17 +295,146 @@ describe('progress', () => {
 })
 
 describe('names', () => {
-  it('starts empty and uses generic labels', () => {
-    const empty = { parent: '', kids: ['', ''] as [string, string] }
-    expect(loadNames(createStorage(), route)).toEqual(empty)
-    expect(displayNames(empty, route)).toEqual({ parent: 'מבוגר/ת', kids: ['ילד/ה 1', 'ילד/ה 2'] })
+  it('joins only the names that were entered', () => {
+    expect(namesLine(['', ' '])).toBeNull()
+    expect(namesLine(['דנה', '', 'רוני'])).toBe('דנה ורוני')
+    expect(namesLine(['דנה', 'גיל', 'רוני'])).toBe('דנה, גיל ורוני')
+    expect(joinHebrew(['א', 'ב', 'ג'])).toBe('א, ב וג')
+  })
+})
+
+describe('group', () => {
+  it('starts with three empty participants that have stable ids, and no personal details', () => {
+    const g = defaultGroup(route)
+    expect(g.participants).toEqual([
+      { id: 'p1', name: '', age: undefined },
+      { id: 'p2', name: '', age: undefined },
+      { id: 'p3', name: '', age: undefined },
+    ])
+    expect(suggestLevel(g.participants)).toBeNull()
+    expect(g.level).toBe('regular')
   })
 
-  it('joins only the names that were entered', () => {
-    expect(familyLine({ parent: '', kids: ['', ''] })).toBeNull()
-    expect(familyLine({ parent: 'דנה', kids: ['', 'רוני'] })).toBe('דנה ורוני')
-    expect(familyLine(names)).toBe('דנה, גיל ורוני')
-    expect(joinHebrew(['א', 'ב', 'ג'])).toBe('א, ב וג')
+  it('normalizes stored groups and never ends up empty', () => {
+    expect(normalizeGroup(route, { version: 1, participants: [] }).participants).toHaveLength(3)
+    const g = normalizeGroup(route, {
+      version: 1,
+      participants: [{ id: 'x', name: 'א', age: '200' }, { id: 'x', name: 'dup' }, { id: 'y', name: 'ב', age: 7 }, { name: 'no id' }],
+      mode: 'teams',
+      level: 'hard',
+      teams: [{ id: 't1' }],
+      teamOf: { x: 't1', ghost: 't1', y: 'nope' },
+    })
+    expect(g.participants).toEqual([
+      { id: 'x', name: 'א', age: undefined },
+      { id: 'y', name: 'ב', age: 7 },
+    ])
+    expect(g.level).toBe('regular')
+    expect(g.teams).toEqual([{ id: 't1', name: 'צוות א' }])
+    expect(g.teamOf).toEqual({ x: 't1' })
+    expect(teamsActive(g)).toBe(false)
+  })
+
+  it('suggests a level from ages, but only when ages were entered', () => {
+    expect(suggestLevel(people(3))).toBeNull()
+    expect(suggestLevel([{ id: 'a', name: '', age: 6 }, { id: 'b', name: '', age: 40 }])).toBe('light')
+    expect(suggestLevel([{ id: 'a', name: '', age: 9 }, { id: 'b', name: '' }])).toBe('regular')
+    expect(suggestLevel([{ id: 'a', name: '', age: 13 }, { id: 'b', name: '', age: 45 }])).toBe('challenge')
+  })
+
+  it('splits 6+ people into teams of 2–4 and repairs teams after edits', () => {
+    const six = autoTeams(people(6))
+    expect(six.teams).toHaveLength(2)
+    const eight = autoTeams(people(8))
+    expect(eight.teams).toHaveLength(2)
+    expect(Object.values(eight.teamOf).filter((t) => t === 't1')).toHaveLength(4)
+    expect(autoTeams(people(9)).teams).toHaveLength(3)
+    // a new person joins: they go to the smallest team; someone leaves: their entry goes away
+    let g = repairTeams(groupOf(8, { mode: 'teams', ...eight }))
+    expect(teamsActive(g)).toBe(true)
+    g = repairTeams({ ...g, participants: [...g.participants, { id: 'new', name: 'חדש' }] })
+    expect(g.teamOf.new).toBeDefined()
+    g = repairTeams({ ...g, participants: g.participants.slice(3) })
+    expect(teamsActive(g)).toBe(true)
+    // below six people, teams switch off without losing the setting
+    const small = repairTeams({ ...g, participants: g.participants.slice(0, 5) })
+    expect(small.mode).toBe('teams')
+    expect(teamsActive(small)).toBe(false)
+  })
+})
+
+describe('roles', () => {
+  const roles = route.roles
+  const byPerson = (n: number, station: number, shift = 0) =>
+    rolesByPerson(assignRoles(roles, people(n), station, shift), people(n)).map((x) => x.roles.length)
+
+  it('has the five roles', () => {
+    expect(roles.map((r) => r.label)).toEqual(['ניווט', 'הקראה', 'חיפוש בשטח', 'תיעוד', 'הצגת החלטה'])
+  })
+
+  it('gives one person every role', () => {
+    expect(byPerson(1, 0)).toEqual([5])
+  })
+
+  it('splits roles between two people and swaps them at the next station', () => {
+    expect(byPerson(2, 0)).toEqual([3, 2])
+    const a = assignRoles(roles, people(2), 0).map((s) => s.personId)
+    const b = assignRoles(roles, people(2), 1).map((s) => s.personId)
+    expect(b).toEqual(a.map((id) => (id === 'p1' ? 'p2' : 'p1')))
+  })
+
+  it('gives everyone a role with 3 and 5 people, rotating each station', () => {
+    expect(byPerson(3, 0)).toEqual([2, 2, 1])
+    expect(byPerson(5, 0)).toEqual([1, 1, 1, 1, 1])
+    const nav = (n: number, st: number) => assignRoles(roles, people(n), st)[0].personId
+    expect(nav(5, 0)).not.toBe(nav(5, 1))
+  })
+
+  it('passes the lead role to many different people over the route with 8 people', () => {
+    const leads = new Set(route.stations.map((_, i) => assignRoles(roles, people(8), i)[0].personId))
+    expect(leads.size).toBe(7)
+    expect(byPerson(8, 0).filter((c) => c === 0)).toHaveLength(3)
+  })
+
+  it('lets the group override a role, falling back when that person leaves', () => {
+    const slots = assignRoles(roles, people(3), 0, 0, { read: 'p3' })
+    expect(slots.find((s) => s.role.id === 'read')).toMatchObject({ personId: 'p3', auto: false })
+    const after = assignRoles(roles, people(2), 0, 0, { read: 'p3' })
+    expect(after.find((s) => s.role.id === 'read')?.auto).toBe(true)
+  })
+})
+
+describe('levels and team answers', () => {
+  it('shows fewer steps at the light level, but always at least two', () => {
+    for (const station of route.stations) {
+      const light = visibleSteps(station, 'light')
+      expect(light.length, station.id).toBeGreaterThanOrEqual(2)
+      expect(light.length, station.id).toBeLessThanOrEqual(visibleSteps(station, 'regular').length)
+    }
+    expect(route.stations.reduce((n, s) => n + visibleSteps(s, 'light').length, 0)).toBeLessThan(allSteps.length)
+  })
+
+  it('keeps each team\'s answers apart from the whole group\'s', () => {
+    const p = withResponses(createProgress(route), {
+      's1-budget': { selected: ['shade'] },
+      's1-budget@t1': { selected: ['bench'] },
+      's1-budget@t2': { selected: ['water'] },
+    })
+    expect(scopedResponses(p, null)['s1-budget'].selected).toEqual(['shade'])
+    expect(scopedResponses(p, 't1')['s1-budget'].selected).toEqual(['bench'])
+    expect(scopedResponses(p, 't2')).not.toHaveProperty('s1-budget@t2')
+  })
+
+  it('loads v2 progress and keeps team-scoped answers', () => {
+    const loaded = normalizeProgress(route, {
+      version: 2,
+      mode: 'light',
+      responses: { 's1-budget': { selected: ['shade'] }, 's1-budget@t1': { selected: ['bench'] }, 's1-budget@bad key': {} },
+      roleOverrides: { 'kiosk|all': { read: 'p2' }, 'ghost|all': { read: 'p1' } },
+    })
+    expect(loaded.version).toBe(3)
+    expect(Object.keys(loaded.responses).sort()).toEqual(['s1-budget', 's1-budget@t1'])
+    expect(loaded.roleOverrides).toEqual({ 'kiosk|all': { read: 'p2' } })
   })
 })
 
@@ -327,8 +463,10 @@ describe('summary', () => {
         [bonusKey('kiosk')]: { text: { answer: 'על הספסל' } },
       },
     )
-    const text = buildSummary(route, p, names, new Date(2026, 9, 10))
-    expect(text).toContain('הצוות: דנה, גיל ורוני')
+    const g = { ...defaultGroup(route), participants: [{ id: 'a', name: 'דנה' }, { id: 'b', name: 'גיל' }, { id: 'c', name: '' }] }
+    const text = buildSummary(route, p, g, new Date(2026, 9, 10))
+    expect(text).toContain('העיר שלנו · הרפתקה בשדרה')
+    expect(text).toContain('משתתפים: דנה, גיל ומשתתף/ת 3')
     expect(text).toContain('הושלמו 1 מתוך 7')
     expect(text).toContain('התחנה האהובה: הקיוסק הראשון')
     expect(text).toContain(route.frame.disclaimer)
@@ -342,9 +480,36 @@ describe('summary', () => {
     expect(text).toContain('בונוס: על הספסל')
   })
 
-  it('omits the team line when no names were entered', () => {
-    const text = buildSummary(route, createProgress(route), { parent: '', kids: ['', ''] })
-    expect(text).not.toContain('הצוות:')
+  it('speaks to a single player personally', () => {
+    const p = withResponses(createProgress(route), {
+      's5-order': { aloud: true },
+      's7-charter': { text: { team: 'רוני', city: 'חולות' } },
+    })
+    const text = buildSummary(route, p, groupOf(1), new Date(2026, 9, 10))
+    expect(text).toContain('העיר שלי · הרפתקה בשדרה')
+    expect(text).toContain('משתתף/ת: שם1')
+    expect(text).toContain('עניתי בעל פה')
+    expect(text).toContain('אני, רוני, מקים/ה את העיר חולות.')
+  })
+
+  it('gives each team its own city and compares them without ranking', () => {
+    const p = withResponses(createProgress(route), {
+      's1-budget@t1': { selected: ['shade'] },
+      's1-budget@t2': { selected: ['bench', 'water'] },
+    })
+    const g = repairTeams(groupOf(8, { mode: 'teams', ...autoTeams(people(8)) }))
+    const text = buildSummary(route, p, g, new Date(2026, 9, 10))
+    expect(text).toContain('== העיר של צוות א ==')
+    expect(text).toContain('== העיר של צוות ב ==')
+    expect(text).toContain('חברי הצוות: שם1, שם3, שם5 ושם7')
+    expect(text).toContain('== השוואה בין ההצעות (בלי מנצחים) ==')
+    expect(text).toContain('צוות א: הצללה')
+    expect(text).toContain('צוות ב: ספסל וברז מי שתייה')
+    expect(text).not.toMatch(/מנצח[^י]|ניקוד|מקום ראשון/)
+  })
+
+  it('works with no answers at all', () => {
+    const text = buildSummary(route, createProgress(route), groupOf(3))
     expect(text).toContain('עוד לא נשמרו החלטות.')
   })
 })

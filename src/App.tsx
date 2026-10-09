@@ -5,6 +5,8 @@ import { parseHash, useHash } from './lib/router'
 import { useOfflineReady } from './lib/useOfflineReady'
 import { useOnline } from './lib/useOnline'
 import { useTrail } from './lib/useTrail'
+import { makeVoice, VoiceProvider } from './lib/voice'
+import { GroupScreen } from './screens/GroupScreen'
 import { AboutScreen } from './screens/AboutScreen'
 import { FinishScreen } from './screens/FinishScreen'
 import { StationScreen } from './screens/StationScreen'
@@ -25,7 +27,7 @@ export default function App() {
   const screenTitle =
     screen.name === 'station'
       ? stationName
-      : { welcome: undefined, stations: 'כל התחנות', finish: 'סיום', about: 'על המסלול ומקורות' }[screen.name]
+      : { welcome: undefined, stations: 'כל התחנות', finish: 'סיום', about: 'על המסלול ומקורות', group: 'המשתתפים' }[screen.name]
 
   // On every screen change: update the tab title, scroll to top and move focus
   // to the screen heading so screen readers announce the new screen.
@@ -39,7 +41,10 @@ export default function App() {
     requestAnimationFrame(() => document.getElementById('screen-title')?.focus({ preventScroll: true }))
   }, [hash, screenTitle])
 
+  const voice = makeVoice(trail.group.participants.length, trail.teams)
+
   return (
+    <VoiceProvider value={voice}>
     <div className="app">
       <a className="skip-link" href="#main" onClick={(e) => {
         e.preventDefault()
@@ -66,7 +71,9 @@ export default function App() {
         {screen.name === 'stations' && <StationsScreen route={route} trail={trail} />}
         {screen.name === 'finish' && <FinishScreen route={route} trail={trail} />}
         {screen.name === 'about' && <AboutScreen route={route} offline={offline} />}
+        {screen.name === 'group' && <GroupScreen route={route} trail={trail} />}
       </main>
     </div>
+    </VoiceProvider>
   )
 }

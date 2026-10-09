@@ -3,7 +3,7 @@
 // Pure functions, local templates only. Nothing here grades an answer.
 
 import type { BudgetStep, CharterStep, Option, Route, Station, Step } from '../content'
-import type { Progress, StepResponse } from './progress'
+import type { Responses, StepResponse } from './progress'
 
 export const BLANK = '______'
 
@@ -30,7 +30,7 @@ export function budgetCost(step: BudgetStep, selected: string[]): number {
 }
 
 /** The current budget pick, falling back to the earlier step it starts from. */
-export function budgetSelection(step: BudgetStep, responses: Progress['responses']): string[] {
+export function budgetSelection(step: BudgetStep, responses: Responses): string[] {
   const own = responses[step.id]?.selected
   if (own) return own
   if (step.startFrom) return responses[step.startFrom]?.selected ?? []
@@ -46,8 +46,8 @@ function fieldLines(step: Step, r: StepResponse | undefined, onlyPlan: boolean):
 }
 
 /** Every answer of one step, as plain lines. */
-export function summarizeStep(route: Route, progress: Progress, step: Step): string[] {
-  const r = progress.responses[step.id]
+export function summarizeStep(route: Route, responses: Responses, step: Step, solo = false): string[] {
+  const r = responses[step.id]
   const lines: string[] = []
   switch (step.kind) {
     case 'observe':
@@ -110,24 +110,24 @@ export function summarizeStep(route: Route, progress: Progress, step: Step): str
       break
     }
     case 'charter':
-      lines.push(charterText(charterValues(route, progress, step)))
+      lines.push(charterText(charterValues(route, responses, step), solo))
       return lines
     case 'open':
       break
   }
   lines.push(...fieldLines(step, r, false))
-  if (r?.aloud) lines.push('ענינו בעל פה')
+  if (r?.aloud) lines.push(solo ? 'עניתי בעל פה' : 'ענינו בעל פה')
   return lines
 }
 
 /** Only what this step contributes to the family city plan. */
-export function planLines(route: Route, progress: Progress, step: Step): string[] {
+export function planLines(route: Route, responses: Responses, step: Step, solo = false): string[] {
   if (!step.plan) return []
-  const r = progress.responses[step.id]
+  const r = responses[step.id]
   const lines: string[] = []
   switch (step.kind) {
     case 'budget': {
-      const selected = budgetSelection(step, progress.responses)
+      const selected = budgetSelection(step, responses)
       if (selected.length) lines.push(joinHebrew(selected.map((id) => labelOf(step.options, id))))
       break
     }
@@ -138,9 +138,9 @@ export function planLines(route: Route, progress: Progress, step: Step): string[
       }
       break
     case 'charter': {
-      const v = charterValues(route, progress, step)
+      const v = charterValues(route, responses, step)
       const empty = [v.team, v.city, ...v.principles, v.build, v.preserve, v.divide].every((t) => !t.trim())
-      return empty ? [] : [charterText(v)]
+      return empty ? [] : [charterText(v, solo)]
     }
     default:
       break
@@ -158,14 +158,18 @@ export interface PlanSection {
   lines: string[]
 }
 
-export function cityPlan(route: Route, progress: Progress, options: { includeCharter?: boolean } = {}): PlanSection[] {
+export function cityPlan(
+  route: Route,
+  responses: Responses,
+  options: { includeCharter?: boolean; solo?: boolean } = {},
+): PlanSection[] {
   return route.stations
     .map((station) => ({
       station,
       title: station.mission.planTitle,
       lines: station.mission.steps
         .filter((s) => options.includeCharter !== false || s.kind !== 'charter')
-        .flatMap((s) => planLines(route, progress, s)),
+        .flatMap((s) => planLines(route, responses, s, options.solo)),
     }))
     .filter((section) => section.lines.length > 0)
 }
@@ -182,8 +186,7 @@ export interface CharterValues {
 export type CharterKey = 'team' | 'city' | 'build' | 'preserve' | 'divide'
 
 /** Suggestions pulled from earlier answers. */
-export function charterSuggestions(route: Route, progress: Progress, step: CharterStep): Omit<CharterValues, 'team' | 'city'> {
-  const responses = progress.responses
+export function charterSuggestions(route: Route, responses: Responses, step: CharterStep): Omit<CharterValues, 'team' | 'city'> {
   const principlesStep = findStep(route, step.from.principles)
   const picked = responses[step.from.principles]?.selected ?? []
   const principles = picked.map((id) => (principlesStep && 'options' in principlesStep ? labelOf(principlesStep.options, id) : id))
@@ -219,9 +222,9 @@ export function charterSuggestions(route: Route, progress: Progress, step: Chart
   }
 }
 
-export function charterValues(route: Route, progress: Progress, step: CharterStep): CharterValues {
-  const r = progress.responses[step.id]
-  const s = charterSuggestions(route, progress, step)
+export function charterValues(route: Route, responses: Responses, step: CharterStep): CharterValues {
+  const r = responses[step.id]
+  const s = charterSuggestions(route, responses, step)
   const pick = (key: CharterKey, fallback: string) => textOf(r, key) || fallback
   return {
     team: pick('team', ''),
@@ -233,9 +236,15 @@ export function charterValues(route: Route, progress: Progress, step: CharterSte
   }
 }
 
-export function charterText(v: CharterValues): string {
+export function charterText(v: CharterValues, solo = false): string {
   const b = (t: string) => t.trim() || BLANK
   const [p1, p2, p3] = v.principles.map(b)
+  if (solo)
+    return [
+      `אני, ${b(v.team)}, מקים/ה את העיר ${b(v.city)}.`,
+      `בעיר שלי חשוב לי ${p1}, ${p2} ו${p3}.`,
+      `לכן אבנה ${b(v.build)}, אשמור על ${b(v.preserve)} ואחליט על חלוקה באמצעות ${b(v.divide)}.`,
+    ].join('\n')
   return [
     `אנחנו, צוות ${b(v.team)}, מקימים את העיר ${b(v.city)}.`,
     `בעיר שלנו חשוב לנו ${p1}, ${p2} ו${p3}.`,

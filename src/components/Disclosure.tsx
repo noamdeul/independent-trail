@@ -6,15 +6,17 @@ export function Disclosure({
   openLabel,
   icon,
   tone = 'plain',
+  defaultOpen = false,
   children,
 }: {
   label: string
   openLabel?: string
   icon?: ReactNode
   tone?: 'plain' | 'reveal'
+  defaultOpen?: boolean
   children: ReactNode
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(defaultOpen)
   const id = useId()
   return (
     <div className={`disclosure disclosure-${tone}`}>

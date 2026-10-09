@@ -1,16 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Route } from '../content'
+import type { LevelId, Route } from '../content'
+import {
+  autoTeams,
+  loadGroup,
+  newId,
+  repairTeams,
+  saveGroup,
+  teamsActive,
+  type GroupMode,
+  type GroupSettings,
+  type Participant,
+} from './group'
 import {
   createProgress,
-  displayNames,
-  loadNames,
   loadProgress,
   nextStationId,
+  overrideKey,
   progressKey,
-  saveNames,
   saveProgress,
-  type ModeId,
-  type Names,
+  scopeKey,
+  scopedResponses,
   type Progress,
   type StationProgress,
   type StepResponse,
@@ -20,7 +29,7 @@ import { createStorage } from './storage'
 export function useTrail(route: Route) {
   const storage = useMemo(() => createStorage(), [])
   const [progress, setProgress] = useState<Progress>(() => loadProgress(storage, route))
-  const [names, setNamesState] = useState<Names>(() => loadNames(storage, route))
+  const [group, setGroupState] = useState<GroupSettings>(() => repairTeams(loadGroup(storage, route)))
   const [persistent, setPersistent] = useState(storage.persistent)
   const firstRender = useRef(true)
 
@@ -33,6 +42,22 @@ export function useTrail(route: Route) {
     setPersistent(storage.persistent)
   }, [storage, progress])
 
+  const teams = teamsActive(group)
+  /** Answers go to the whole group, or to the team holding the device. */
+  const scope = teams ? group.activeTeamId : null
+  const responses = useMemo(() => scopedResponses(progress, scope), [progress, scope])
+
+  const setGroup = useCallback(
+    (fn: (g: GroupSettings) => GroupSettings) =>
+      setGroupState((prev) => {
+        const next = repairTeams(fn(prev))
+        saveGroup(storage, route, next)
+        setPersistent(storage.persistent)
+        return next
+      }),
+    [storage, route],
+  )
+
   const update = useCallback((fn: (p: Progress) => Progress) => {
     setProgress((prev) => ({ ...fn(prev), updatedAt: new Date().toISOString() }))
   }, [])
@@ -43,30 +68,21 @@ export function useTrail(route: Route) {
     [update],
   )
 
-  /** Merge a patch into one step's response. Functional so rapid edits never race. */
+  /** Merge a patch into one step's response, in the current scope. */
   const respond = useCallback(
     (stepId: string, patch: StepResponse | ((r: StepResponse) => StepResponse)) =>
       update((p) => {
-        const prev = p.responses[stepId] ?? {}
+        const key = scopeKey(stepId, scope)
+        const prev = p.responses[key] ?? {}
         const next = typeof patch === 'function' ? patch(prev) : { ...prev, ...patch }
-        return { ...p, responses: { ...p.responses, [stepId]: next } }
+        return { ...p, responses: { ...p.responses, [key]: next } }
       }),
-    [update],
+    [update, scope],
   )
 
   const setText = useCallback(
-    (stepId: string, key: string, value: string) =>
-      respond(stepId, (r) => ({ ...r, text: { ...r.text, [key]: value } })),
+    (stepId: string, key: string, value: string) => respond(stepId, (r) => ({ ...r, text: { ...r.text, [key]: value } })),
     [respond],
-  )
-
-  const setNames = useCallback(
-    (next: Names) => {
-      setNamesState(next)
-      saveNames(storage, route, next)
-      setPersistent(storage.persistent)
-    },
-    [storage, route],
   )
 
   const visitStation = useCallback((id: string) => {
@@ -85,27 +101,55 @@ export function useTrail(route: Route) {
 
   const reset = useCallback(() => {
     storage.remove(progressKey(route.id))
-    setProgress((p) => ({ ...createProgress(route), mode: p.mode }))
+    setProgress(createProgress(route))
   }, [storage, route])
 
   return {
     progress,
-    names,
-    shownNames: displayNames(names, route),
+    group,
+    teams,
+    scope,
+    responses,
     persistent,
-    setNames,
-    visitStation,
     respond,
     setText,
-    setMode: (mode: ModeId) => update((p) => ({ ...p, mode })),
+    visitStation,
     openNextStep: (id: string, total: number) =>
       updateStation(id, (s) => ({ stepsOpen: Math.min(total, (s?.stepsOpen ?? 1) + 1) })),
-    shiftRoles: (id: string) => updateStation(id, (s) => ({ roleShift: ((s?.roleShift ?? 0) + 1) % 3 })),
+    shiftRoles: (id: string) => updateStation(id, (s) => ({ roleShift: (s?.roleShift ?? 0) + 1 })),
+    setRole: (stationId: string, teamId: string | null, roleId: string, personId: string) =>
+      update((p) => {
+        const key = overrideKey(stationId, teamId)
+        const current = { ...p.roleOverrides[key] }
+        if (personId) current[roleId] = personId
+        else delete current[roleId]
+        return { ...p, roleOverrides: { ...p.roleOverrides, [key]: current } }
+      }),
     reopen: (id: string) => updateStation(id, () => ({ status: 'pending' })),
     complete: (id: string) => markAndNext(id, 'done'),
     skip: (id: string) => markAndNext(id, 'skipped'),
     setFavorite: (id: string) => update((p) => ({ ...p, favoriteStationId: id })),
     reset,
+
+    // ---- group editing: never touches saved answers
+    addParticipant: () =>
+      setGroup((g) => ({ ...g, participants: [...g.participants, { id: newId('p'), name: '' }] })),
+    removeParticipant: (id: string) =>
+      setGroup((g) => {
+        if (g.participants.length <= 1) return g
+        const teamOf = { ...g.teamOf }
+        delete teamOf[id]
+        return { ...g, participants: g.participants.filter((p) => p.id !== id), teamOf }
+      }),
+    updateParticipant: (id: string, patch: Partial<Omit<Participant, 'id'>>) =>
+      setGroup((g) => ({ ...g, participants: g.participants.map((p) => (p.id === id ? { ...p, ...patch } : p)) })),
+    setLevel: (level: LevelId) => setGroup((g) => ({ ...g, level })),
+    setMode: (mode: GroupMode) => setGroup((g) => ({ ...g, mode })),
+    setTeamCount: (count: number) => setGroup((g) => ({ ...g, ...autoTeams(g.participants, count) })),
+    reshuffleTeams: () => setGroup((g) => ({ ...g, ...autoTeams(g.participants, g.teams.length || undefined) })),
+    setTeamOf: (participantId: string, teamId: string) =>
+      setGroup((g) => ({ ...g, teamOf: { ...g.teamOf, [participantId]: teamId } })),
+    setActiveTeam: (teamId: string) => setGroup((g) => ({ ...g, activeTeamId: teamId })),
   }
 }
 
