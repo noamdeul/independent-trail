@@ -51,7 +51,7 @@ export const independenceShort: Route = {
     { id: 'record', label: 'תיעוד', description: 'מסמן/ת או כותב/ת את התשובות' },
     { id: 'present', label: 'הצגת החלטה', description: 'מציג/ה את ההחלטה המשותפת' },
   ],
-  defaultParticipants: [{ name: 'נועם' }, { name: 'עומרי', age: 13 }, { name: 'אלה', age: 9 }],
+  defaultParticipants: [{ name: '' }, { name: '' }, { name: '' }],
   stations: [
     // ---------------------------------------------------------------- 1
     {

@@ -151,6 +151,7 @@ test('eight participants: one group with free helpers, or teams on one device wi
 })
 
 test('editing the group mid-route keeps answers, updates roles and survives a refresh', async ({ page }) => {
+  await setPeople(page, ['דנה', 'גיל', 'רוני'])
   await page.getByRole('button', { name: 'מתחילים', exact: true }).click()
   await page.getByRole('button', { name: 'סיימנו את התחנה' }).click()
   await page.getByRole('button', { name: 'סיימנו את התחנה' }).click()
@@ -158,10 +159,10 @@ test('editing the group mid-route keeps answers, updates roles and survives a re
   const match = step(page, 'מי גר איפה?')
   await expect(match).toContainText('פתרו יחד')
   await match.getByRole('group', { name: /משפחת שקט/ }).getByRole('button', { name: 'מגרש ב' }).click()
-  await expect(roleItems(page)).toContainText(['אלה'])
+  await expect(roleItems(page)).toContainText(['רוני'])
 
   await page.getByRole('link', { name: /עריכת המשתתפים/ }).click()
-  await page.getByRole('button', { name: 'הסרת אלה' }).click()
+  await page.getByRole('button', { name: 'הסרת רוני' }).click()
   await page.getByRole('button', { name: 'הוספת משתתף/ת' }).click()
   await page.getByLabel('משתתף/ת 3', { exact: true }).fill('מאיה')
   await page.getByLabel(/^גיל/).nth(2).fill('6')
@@ -170,7 +171,7 @@ test('editing the group mid-route keeps answers, updates roles and survives a re
   await page.getByRole('link', { name: 'חזרה לתחנה' }).click()
 
   await expect(page).toHaveURL(/#\/station\/weiss-house$/)
-  await expect(roleItems(page)).not.toContainText(['אלה'])
+  await expect(roleItems(page)).not.toContainText(['רוני'])
   await expect(page.getByRole('region', { name: 'תפקידים בתחנה' })).toContainText('מאיה')
   await expect(step(page, 'מי גר איפה?').getByRole('group', { name: /משפחת שקט/ }).getByRole('button', { name: 'מגרש ב' })).toHaveAttribute(
     'aria-pressed',
@@ -183,7 +184,7 @@ test('editing the group mid-route keeps answers, updates roles and survives a re
     'true',
   )
   await page.getByRole('link', { name: 'סיום' }).click()
-  await expect(page.locator('.participants-line')).toHaveText('המשתתפים: נועם, עומרי ומאיה')
+  await expect(page.locator('.participants-line')).toHaveText('המשתתפים: דנה, גיל ומאיה')
 
   // reset clears progress but keeps the group
   await page.getByRole('button', { name: 'איפוס' }).click()

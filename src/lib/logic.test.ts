@@ -304,13 +304,14 @@ describe('names', () => {
 })
 
 describe('group', () => {
-  it('starts with editable default participants that have stable ids', () => {
+  it('starts with three empty participants that have stable ids, and no personal details', () => {
     const g = defaultGroup(route)
     expect(g.participants).toEqual([
-      { id: 'p1', name: 'נועם', age: undefined },
-      { id: 'p2', name: 'עומרי', age: 13 },
-      { id: 'p3', name: 'אלה', age: 9 },
+      { id: 'p1', name: '', age: undefined },
+      { id: 'p2', name: '', age: undefined },
+      { id: 'p3', name: '', age: undefined },
     ])
+    expect(suggestLevel(g.participants)).toBeNull()
     expect(g.level).toBe('regular')
   })
 
