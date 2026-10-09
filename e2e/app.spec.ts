@@ -37,9 +37,10 @@ test('welcome screen is Hebrew RTL and fits 375px', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1, name: 'הרפתקה בשדרה' })).toBeVisible()
   await expect(page.getByText('7 תחנות')).toBeVisible()
   await expect(page.getByText('כ־60–90 דקות (הערכה)')).toBeVisible()
-  await expect(page.getByLabel('מבוגר/ת')).toHaveValue('נועם')
-  await expect(page.getByLabel('ילד/ה ראשון/ה')).toHaveValue('עומרי')
-  await expect(page.getByLabel('ילד/ה שני/ה')).toHaveValue('אלה')
+  await expect(page.getByLabel('מבוגר/ת')).toHaveValue('')
+  await expect(page.getByLabel('ילד/ה ראשון/ה')).toHaveValue('')
+  await expect(page.getByLabel('ילד/ה שני/ה')).toHaveValue('')
+  await expect(page.getByText('הפעילות מתחילה במפגש רחוב הרצל ושדרות רוטשילד.')).toBeVisible()
   await expect(page.getByText('מים לכל אחד')).toBeVisible()
   await expect(page.getByRole('button', { name: 'ממשיכים מאיפה שעצרנו' })).toHaveCount(0)
   await expectNoHorizontalScroll(page)
@@ -48,21 +49,22 @@ test('welcome screen is Hebrew RTL and fits 375px', async ({ page }) => {
 })
 
 test('full family flow: names, roles, complete, skip, refresh, revisit, finish, reset', async ({ page }) => {
-  await page.getByLabel('ילד/ה שני/ה').fill('אלה מאיה')
+  await page.getByLabel('מבוגר/ת').fill('דנה')
+  await page.getByLabel('ילד/ה ראשון/ה').fill('גיל')
+  await page.getByLabel('ילד/ה שני/ה').fill('רוני')
   await page.getByRole('button', { name: 'מתחילים', exact: true }).click()
 
   // Station 1
   await expect(page).toHaveURL(/#\/station\/kiosk$/)
   await expect(page.getByText('תחנה 1 מתוך 7')).toBeVisible()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('הקיוסק הראשון')
-  await expect(page.getByText('מהמסעדה הולכים ברחוב הרצל עד המפגש עם שדרות רוטשילד.')).toBeVisible()
   await expect(page.locator('.story-text')).toContainText('בשנת 1910 נפתח כאן הקיוסק הראשון')
   await expect(page.locator('.task-text')).toHaveText('אתם פותחים קיוסק בעיר חדשה. בחרו לו שם ושלושה דברים שתמכרו בו.')
   const roles = page.getByRole('region', { name: 'תפקידים בתחנה' })
-  await expect(roles).toContainText('מנווט/ת עומרי')
-  await expect(roles).toContainText('מקריא/ה אלה מאיה')
+  await expect(roles).toContainText('מנווט/ת גיל')
+  await expect(roles).toContainText('מקריא/ה רוני')
   await roles.getByRole('button', { name: 'החלפת תפקידים' }).click()
-  await expect(roles).toContainText('מנווט/ת אלה מאיה')
+  await expect(roles).toContainText('מנווט/ת רוני')
 
   // Reveal is hidden until asked for; no hint on this creative station
   await expect(page.getByText(/ומכר גזוז בשלל טעמים/)).toHaveCount(0)
@@ -92,7 +94,7 @@ test('full family flow: names, roles, complete, skip, refresh, revisit, finish, 
 
   // Back on the welcome screen we can resume
   await page.getByRole('link', { name: /למסך הפתיחה/ }).click()
-  await expect(page.getByLabel('ילד/ה שני/ה')).toHaveValue('אלה מאיה')
+  await expect(page.getByLabel('ילד/ה שני/ה')).toHaveValue('רוני')
   await page.getByRole('button', { name: 'ממשיכים מאיפה שעצרנו' }).click()
   await expect(page).toHaveURL(/#\/station\/weiss-house$/)
 
@@ -132,6 +134,7 @@ test('full family flow: names, roles, complete, skip, refresh, revisit, finish, 
   await expect(page.locator('.big-count')).toContainText('7 מתוך 7')
   await expect(page.getByText('קיוסק הגזוז של השדרה')).toBeVisible()
   await expect(page.getByText(/גלידה/)).toBeVisible()
+  await expect(page.getByText('כל הכבוד, דנה, גיל ורוני!')).toBeVisible()
   await page.getByRole('radio', { name: 'פסל מאיר דיזנגוף' }).check()
   await page.reload()
   await expect(page.getByRole('radio', { name: 'פסל מאיר דיזנגוף' })).toBeChecked()
@@ -146,7 +149,7 @@ test('full family flow: names, roles, complete, skip, refresh, revisit, finish, 
   ])
   expect(download.suggestedFilename()).toMatch(/^shdera-summary-\d{4}-\d{2}-\d{2}\.txt$/)
   const text = readFileSync((await download.path())!, 'utf8')
-  expect(text).toContain('נועם, עומרי ואלה מאיה')
+  expect(text).toContain('משתתפים: דנה, גיל ורוני')
   expect(text).toContain('הושלמו 7 מתוך 7')
   expect(text).toContain('התחנה האהובה: פסל מאיר דיזנגוף')
   expect(text).toContain('קיוסק הגזוז של השדרה')
@@ -163,7 +166,7 @@ test('full family flow: names, roles, complete, skip, refresh, revisit, finish, 
   await expect(page.getByRole('button', { name: 'מתחילים', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'ממשיכים מאיפה שעצרנו' })).toHaveCount(0)
   // Names are kept after reset
-  await expect(page.getByLabel('ילד/ה שני/ה')).toHaveValue('אלה מאיה')
+  await expect(page.getByLabel('ילד/ה שני/ה')).toHaveValue('רוני')
 })
 
 test('navigation links open Google Maps walking directions with Hebrew queries', async ({ page }) => {

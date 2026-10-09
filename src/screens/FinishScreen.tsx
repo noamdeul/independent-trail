@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { Route } from '../content'
 import { IconDownload, IconHeart, IconIceCream, IconRefresh } from '../components/Icons'
-import { countByStatus, nextStationId } from '../lib/progress'
+import { countByStatus, familyLine, nextStationId } from '../lib/progress'
 import { hrefFor, navigate } from '../lib/router'
 import { buildSummary, summaryFileName } from '../lib/summary'
 import type { Trail } from '../lib/useTrail'
@@ -21,7 +21,8 @@ function downloadText(text: string, fileName: string) {
 }
 
 export function FinishScreen({ route, trail }: { route: Route; trail: Trail }) {
-  const { progress, shownNames } = trail
+  const { progress, names } = trail
+  const family = familyLine(names)
   const [confirming, setConfirming] = useState(false)
   const [message, setMessage] = useState('')
   const resetButton = useRef<HTMLButtonElement>(null)
@@ -57,7 +58,7 @@ export function FinishScreen({ route, trail }: { route: Route; trail: Trail }) {
 
       <section className="card celebrate" aria-labelledby="celebrate-title">
         <h2 id="celebrate-title" className="card-title">
-          <IconIceCream size={22} /> {shownNames.parent}, {shownNames.kids[0]} ו{shownNames.kids[1]}
+          <IconIceCream size={22} /> {family ? `כל הכבוד, ${family}!` : 'כל הכבוד לכל המשפחה!'}
         </h2>
         <p>
           הלכתם יחד בשדרה שבה התחילה העיר, שמעתם סיפורים ופתרתם משימות כצוות. זה זמן מצוין לעצור לגלידה ולספר מה הכי
@@ -107,7 +108,7 @@ export function FinishScreen({ route, trail }: { route: Route; trail: Trail }) {
         type="button"
         className="btn btn-primary"
         onClick={() => {
-          downloadText(buildSummary(route, progress, shownNames), summaryFileName())
+          downloadText(buildSummary(route, progress, names), summaryFileName())
           setMessage('הסיכום הורד כקובץ טקסט.')
         }}
       >

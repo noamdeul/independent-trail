@@ -59,12 +59,8 @@ export interface Route {
   subtitle: string
   intro: string
   durationText: string
-  meetingPoint: {
-    name: string
-    address: string
-    /** Verified way from the meeting point to the first station. */
-    walkToStart: string
-  }
+  /** Where the activity starts (a public place, not a personal meeting point). */
+  startPoint: string
   reminders: string[]
   stations: Station[]
   about: {
@@ -77,7 +73,8 @@ export interface Route {
     unverified: string[]
     contentCheckedOn: string
   }
-  defaultNames: {
+  /** Generic labels shown when a name field is left empty. */
+  nameFallbacks: {
     parent: string
     kids: [string, string]
   }

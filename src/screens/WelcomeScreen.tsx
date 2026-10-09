@@ -60,10 +60,7 @@ export function WelcomeScreen({ route, trail }: { route: Route; trail: Trail }) 
           <h2 id="start-point" className="card-title">
             <IconTree size={20} /> נקודת יציאה
           </h2>
-          <p>
-            אחרי ארוחת צהריים ב{route.meetingPoint.name}, {route.meetingPoint.address}.
-          </p>
-          <p>{route.meetingPoint.walkToStart}</p>
+          <p>{route.startPoint}</p>
           <p className="muted small">התחנה הראשונה: {first.name}.</p>
         </section>
 
@@ -77,6 +74,7 @@ export function WelcomeScreen({ route, trail }: { route: Route; trail: Trail }) 
               <input
                 type="text"
                 value={names.parent}
+                placeholder="שם (לא חובה)"
                 maxLength={40}
                 autoComplete="off"
                 enterKeyHint="next"
@@ -88,6 +86,7 @@ export function WelcomeScreen({ route, trail }: { route: Route; trail: Trail }) 
               <input
                 type="text"
                 value={names.kids[0]}
+                placeholder="שם (לא חובה)"
                 maxLength={40}
                 autoComplete="off"
                 enterKeyHint="next"
@@ -99,6 +98,7 @@ export function WelcomeScreen({ route, trail }: { route: Route; trail: Trail }) 
               <input
                 type="text"
                 value={names.kids[1]}
+                placeholder="שם (לא חובה)"
                 maxLength={40}
                 autoComplete="off"
                 enterKeyHint="done"

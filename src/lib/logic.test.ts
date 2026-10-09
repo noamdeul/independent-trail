@@ -4,6 +4,8 @@ import { walkingDirectionsUrl } from './maps'
 import { stationNotices } from './siteStatus'
 import {
   createProgress,
+  displayNames,
+  familyLine,
   loadNames,
   loadProgress,
   nextStationId,
@@ -17,7 +19,7 @@ import { hrefFor, parseHash } from './router'
 import { createStorage } from './storage'
 import { buildSummary } from './summary'
 
-const names = { parent: 'נועם', kids: ['עומרי', 'אלה'] as [string, string] }
+const names = { parent: 'דנה', kids: ['גיל', 'רוני'] as [string, string] }
 
 function withStatus(p: Progress, id: string, status: 'done' | 'skipped' | 'pending'): Progress {
   return { ...p, stations: { ...p.stations, [id]: { ...p.stations[id], status } } }
@@ -108,10 +110,10 @@ describe('progress', () => {
 
   it('alternates roles and allows a manual swap', () => {
     const p = createProgress(route)
-    expect(rolesFor(route, p, names, 'kiosk')).toEqual({ navigator: 'עומרי', reader: 'אלה' })
-    expect(rolesFor(route, p, names, 'mosaic')).toEqual({ navigator: 'אלה', reader: 'עומרי' })
+    expect(rolesFor(route, p, names, 'kiosk')).toEqual({ navigator: 'גיל', reader: 'רוני' })
+    expect(rolesFor(route, p, names, 'mosaic')).toEqual({ navigator: 'רוני', reader: 'גיל' })
     const swapped = { ...p, stations: { ...p.stations, kiosk: { ...p.stations.kiosk, rolesSwapped: true } } }
-    expect(rolesFor(route, swapped, names, 'kiosk')).toEqual({ navigator: 'אלה', reader: 'עומרי' })
+    expect(rolesFor(route, swapped, names, 'kiosk')).toEqual({ navigator: 'רוני', reader: 'גיל' })
   })
 
   it('survives corrupt or foreign stored data', () => {
@@ -145,7 +147,28 @@ describe('progress', () => {
     expect(storage.persistent).toBe(false)
     expect(storage.set('a', '1')).toBe(false)
     expect(storage.get('a')).toBe('1')
-    expect(loadNames(storage, route)).toEqual(names)
+    expect(loadNames(storage, route)).toEqual({ parent: '', kids: ['', ''] })
+  })
+})
+
+describe('names', () => {
+  it('starts empty and uses generic labels, with no personal defaults in the route', () => {
+    const empty = { parent: '', kids: ['', ''] as [string, string] }
+    expect(loadNames(createStorage(), route)).toEqual(empty)
+    expect(displayNames(empty, route)).toEqual({ parent: 'מבוגר/ת', kids: ['ילד/ה 1', 'ילד/ה 2'] })
+    expect(rolesFor(route, createProgress(route), displayNames(empty, route), 'kiosk')).toEqual({
+      navigator: 'ילד/ה 1',
+      reader: 'ילד/ה 2',
+    })
+  })
+
+  it('joins only the names that were entered', () => {
+    expect(familyLine({ parent: '', kids: ['', ''] })).toBeNull()
+    expect(familyLine({ parent: '', kids: ['גיל', ''] })).toBe('גיל')
+    expect(familyLine({ parent: 'דנה', kids: ['', 'רוני'] })).toBe('דנה ורוני')
+    expect(familyLine(names)).toBe('דנה, גיל ורוני')
+    const text = buildSummary(route, createProgress(route), { parent: '', kids: ['', ''] })
+    expect(text).not.toContain('משתתפים')
   })
 })
 
@@ -164,12 +187,12 @@ describe('router', () => {
 describe('summary', () => {
   it('includes names, counts, notes and favorite', () => {
     let p = withStatus(createProgress(route), 'kiosk', 'done')
-    p = { ...p, favoriteStationId: 'kiosk', stations: { ...p.stations, kiosk: { ...p.stations.kiosk, note: 'קיוסק הגזוז\nשל אלה' } } }
+    p = { ...p, favoriteStationId: 'kiosk', stations: { ...p.stations, kiosk: { ...p.stations.kiosk, note: 'קיוסק הגזוז\nשל רוני' } } }
     const text = buildSummary(route, p, names, new Date(2026, 9, 9))
-    expect(text).toContain('נועם, עומרי ואלה')
+    expect(text).toContain('משתתפים: דנה, גיל ורוני')
     expect(text).toContain('הושלמו 1 מתוך 7')
     expect(text).toContain('התחנה האהובה: הקיוסק הראשון')
-    expect(text).toContain('מה כתבנו: קיוסק הגזוז / של אלה')
+    expect(text).toContain('מה כתבנו: קיוסק הגזוז / של רוני')
     expect(text).toContain('(טרם ביקרנו)')
   })
 })

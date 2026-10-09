@@ -1,5 +1,5 @@
 import type { Route } from '../content'
-import type { Names, Progress, StationStatus } from './progress'
+import { familyLine, type Names, type Progress, type StationStatus } from './progress'
 
 const STATUS_TEXT: Record<StationStatus, string> = {
   pending: 'טרם ביקרנו',
@@ -29,12 +29,10 @@ export function formatIsoDate(iso: string): string {
 export function buildSummary(route: Route, progress: Progress, names: Names, now = new Date()): string {
   const done = route.stations.filter((s) => progress.stations[s.id]?.status === 'done').length
   const favorite = route.stations.find((s) => s.id === progress.favoriteStationId)
-  const lines: string[] = [
-    `${route.title}: ${route.subtitle}`,
-    formatHebrewDate(now),
-    `משתתפים: ${names.parent}, ${names.kids[0]} ו${names.kids[1]}`,
-    `הושלמו ${done} מתוך ${route.stations.length} תחנות`,
-  ]
+  const family = familyLine(names)
+  const lines: string[] = [`${route.title}: ${route.subtitle}`, formatHebrewDate(now)]
+  if (family) lines.push(`משתתפים: ${family}`)
+  lines.push(`הושלמו ${done} מתוך ${route.stations.length} תחנות`)
   if (favorite) lines.push(`התחנה האהובה: ${favorite.name}`)
   lines.push('')
   route.stations.forEach((station, i) => {

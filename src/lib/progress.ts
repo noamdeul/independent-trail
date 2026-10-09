@@ -80,12 +80,12 @@ export function saveProgress(storage: SafeStorage, progress: Progress): boolean 
   return storage.set(progressKey(progress.routeId), JSON.stringify(progress))
 }
 
-export function defaultNames(route: Route): Names {
-  return { parent: route.defaultNames.parent, kids: [...route.defaultNames.kids] as [string, string] }
+export function emptyNames(): Names {
+  return { parent: '', kids: ['', ''] }
 }
 
 export function loadNames(storage: SafeStorage, route: Route): Names {
-  const fallback = defaultNames(route)
+  const fallback = emptyNames()
   const raw = readJson<Partial<Names>>(storage, namesKey(route.id))
   if (!raw || typeof raw !== 'object') return fallback
   const kids = Array.isArray(raw.kids) ? raw.kids : []
@@ -102,14 +102,22 @@ export function saveNames(storage: SafeStorage, route: Route, names: Names): boo
   return storage.set(namesKey(route.id), JSON.stringify(names))
 }
 
-/** Display name with a fallback, so empty name fields never leave a blank. */
+/** Display name with a generic fallback, so empty name fields never leave a blank. */
 export function displayNames(names: Names, route: Route): Names {
-  const d = route.defaultNames
+  const d = route.nameFallbacks
   const pick = (value: string, fallback: string) => value.trim() || fallback
   return {
     parent: pick(names.parent, d.parent),
     kids: [pick(names.kids[0], d.kids[0]), pick(names.kids[1], d.kids[1])],
   }
+}
+
+/** "א", "א וב", "א, ב וג" from the names actually entered; null when none were. */
+export function familyLine(names: Names): string | null {
+  const list = [names.parent, ...names.kids].map((n) => n.trim()).filter(Boolean)
+  if (list.length === 0) return null
+  if (list.length === 1) return list[0]
+  return `${list.slice(0, -1).join(', ')} ו${list[list.length - 1]}`
 }
 
 export function hasProgress(progress: Progress): boolean {
