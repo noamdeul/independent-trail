@@ -256,7 +256,7 @@ test('full family flow through the interactive missions to "our city"', async ({
   await expect(doc).toContainText('אנחנו, צוות השדרה, מקימים את העיר עיר החולות.')
   await expect(doc).toContainText('בעיר שלנו חשוב לנו חלוקה הוגנת, מקום למשחק ולמפגש ושמירה על העבר.')
   await expect(doc).toContainText(
-    'לכן נבנה גינה ומגרש משחקים וספרייה, נשמור על חלק מהמבנה ההיסטורי ונחליט על חלוקה באמצעות שילוב של הגרלה והתאמה לצרכים.',
+    'לכן נבנה גינה ומגרש משחקים וספרייה, נשמור על חלק מהמבנה ההיסטורי ונחליט על חלוקה באמצעות קודם צרכים, ואז הגרלה.',
   )
   await expectNoHorizontalScroll(page)
   await expectTapTargets(page)

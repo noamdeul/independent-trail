@@ -1,18 +1,22 @@
 import { useEffect, useState } from 'react'
+import { serviceWorkerRegistration } from './serviceWorker'
 
-export type OfflineState = 'unsupported' | 'pending' | 'ready'
+export type OfflineState = 'unsupported' | 'pending' | 'ready' | 'failed'
 
 /** Reports whether the service worker is active, i.e. the app is cached for offline use. */
 export function useOfflineReady(): OfflineState {
-  const supported = typeof navigator !== 'undefined' && 'serviceWorker' in navigator && import.meta.env.PROD
-  const [state, setState] = useState<OfflineState>(supported ? 'pending' : 'unsupported')
+  const registration = serviceWorkerRegistration()
+  const [state, setState] = useState<OfflineState>(registration ? 'pending' : 'unsupported')
   useEffect(() => {
-    if (!supported) return
+    if (!registration) return
     let alive = true
-    navigator.serviceWorker.ready.then(() => alive && setState('ready')).catch(() => undefined)
+    registration
+      .then(() => navigator.serviceWorker.ready)
+      .then(() => alive && setState('ready'))
+      .catch(() => alive && setState('failed'))
     return () => {
       alive = false
     }
-  }, [supported])
+  }, [registration])
   return state
 }

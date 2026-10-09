@@ -1,6 +1,7 @@
 import { useId } from 'react'
 import type { Route } from '../content'
 import { normalizeAge, suggestLevel, teamMembers, teamsActive, TEAMS_FROM } from '../lib/group'
+import { teamIdsWithAnswers, teamLabel } from '../lib/summary'
 import type { Trail } from '../lib/useTrail'
 import { IconPlus, IconTrash } from './Icons'
 
@@ -82,6 +83,10 @@ function TeamsEditor({ trail }: { trail: Trail }) {
   const { group } = trail
   const active = teamsActive(group)
   const maxTeams = Math.min(Math.floor(group.participants.length / 2), 8)
+  const answered = teamIdsWithAnswers(trail.progress)
+  const lastTeam = group.teams[group.teams.length - 1]
+  const lastHasAnswers = !!lastTeam && answered.includes(lastTeam.id)
+  const parked = answered.filter((id) => !group.teams.some((t) => t.id === id))
   return (
     <fieldset className="subcard">
       <legend className="subhead">איך משחקים?</legend>
@@ -122,6 +127,17 @@ function TeamsEditor({ trail }: { trail: Trail }) {
               +
             </button>
           </div>
+          {lastHasAnswers && group.teams.length > 2 && (
+            <p className="small warn-note">
+              ל{lastTeam.name} כבר יש תשובות. אם יורידו צוות, התשובות שלו יישמרו ויוצגו בנפרד במסך הסיום.
+            </p>
+          )}
+          {parked.length > 0 && (
+            <p className="small warn-note">
+              יש תשובות שמורות של {parked.map((id) => teamLabel(group, id)).join(', ')}, שכבר לא פעיל. הן מוצגות במסך
+              הסיום, ויחזרו לצוות אם יוסיפו אותו שוב.
+            </p>
+          )}
           <ul className="team-list">
             {group.teams.map((team) => {
               const size = teamMembers(group, team.id).length
@@ -152,6 +168,9 @@ function TeamsEditor({ trail }: { trail: Trail }) {
           <button type="button" className="btn btn-small btn-soft" onClick={trail.reshuffleTeams}>
             חלוקה אוטומטית מחדש
           </button>
+          {answered.length > 0 && (
+            <p className="muted small">התשובות שייכות לצוות (צוות א, צוות ב…), אז הן נשארות במקומן גם כשהחברים מתחלפים.</p>
+          )}
         </div>
       )}
     </fieldset>

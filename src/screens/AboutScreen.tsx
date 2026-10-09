@@ -9,6 +9,7 @@ const offlineText: Record<OfflineState, string> = {
   ready: 'האפליקציה שמורה במכשיר ותעבוד גם בלי אינטרנט.',
   pending: 'שומרים את האפליקציה לשימוש בלי אינטרנט…',
   unsupported: 'הדפדפן הזה לא תומך בשמירה לשימוש בלי אינטרנט. כדאי להשאיר את הדף פתוח.',
+  failed: 'לא הצלחנו לשמור את האפליקציה לשימוש בלי אינטרנט. כדאי להשאיר את הדף פתוח ולנסות לטעון שוב כשיש חיבור.',
 }
 
 export function AboutScreen({ route, offline }: { route: Route; offline: OfflineState }) {

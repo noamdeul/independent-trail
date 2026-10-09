@@ -7,7 +7,7 @@ import { RolesCard } from '../components/RolesCard'
 import { StatusChip } from '../components/StatusChip'
 import { AloudToggle, StepCard } from '../components/steps'
 import { walkingDirectionsUrl } from '../lib/maps'
-import { bonusKey, countByStatus, visibleSteps } from '../lib/progress'
+import { bonusKey, countByStatus, isStepAnswered, visibleSteps } from '../lib/progress'
 import { hrefFor, navigate } from '../lib/router'
 import { stationNotices } from '../lib/siteStatus'
 import { statusText } from '../lib/summary'
@@ -44,7 +44,9 @@ export function StationScreen({ route, trail, stationId }: { route: Route; trail
   const doneCount = countByStatus(progress, 'done')
   const mission = station.mission
   const steps = visibleSteps(station, group.level)
-  const stepsOpen = Math.min(Math.max(1, state.stepsOpen), steps.length)
+  // Never hide a step that already has an answer, e.g. after switching level.
+  const lastAnswered = steps.reduce((last, st, i) => (isStepAnswered(responses[st.id]) ? i : last), -1)
+  const stepsOpen = Math.min(Math.max(1, state.stepsOpen, lastAnswered + 1), steps.length)
   const challenge = group.level === 'challenge'
   const bonus = responses[bonusKey(station.id)] ?? {}
   const activeTeam = trail.teams ? group.teams.find((tm) => tm.id === trail.scope) : undefined
@@ -190,7 +192,7 @@ export function StationScreen({ route, trail, stationId }: { route: Route; trail
         ))}
 
         {stepsOpen < steps.length ? (
-          <button type="button" className="btn btn-secondary" onClick={() => trail.openNextStep(station.id, steps.length)}>
+          <button type="button" className="btn btn-secondary" onClick={() => trail.openNextStep(station.id, stepsOpen)}>
             לשלב הבא: {steps[stepsOpen].title}
           </button>
         ) : (

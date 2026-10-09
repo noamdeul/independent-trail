@@ -1,5 +1,5 @@
 import type { Route } from '../content'
-import { personName, teamMembers, teamsActive, type GroupSettings, type Team } from './group'
+import { TEAM_LETTERS, teamMembers, teamsActive, type GroupSettings, type Participant } from './group'
 import { cityPlan, summarizeStep } from './plan'
 import { bonusKey, namesLine, scopedResponses, type Progress, type Responses, type StationStatus } from './progress'
 
@@ -30,14 +30,95 @@ export function formatIsoDate(iso: string): string {
 
 const indent = (text: string, by = '   ') => text.split('\n').map((l) => `${by}${l}`)
 
-/** "העיר שלנו" / "העיר שלי" / "העיר של צוות א" */
-export function cityTitle(group: GroupSettings, team?: Team): string {
-  if (team) return `העיר של ${team.name}`
+/** "העיר שלנו" / "העיר שלי" */
+export function cityTitle(group: GroupSettings): string {
   return group.participants.length === 1 ? 'העיר שלי' : 'העיר שלנו'
 }
 
+/** Only names someone actually typed; the "משתתף/ת 1" placeholders are left out. */
+export function typedNames(people: Participant[]): string | null {
+  return namesLine(people.map((p) => p.name))
+}
+
 export function participantsLine(group: GroupSettings): string | null {
-  return namesLine(group.participants.map((p) => personName(group, p.id)))
+  return typedNames(group.participants)
+}
+
+function membersText(people: Participant[]): string | null {
+  if (people.length === 0) return null
+  return typedNames(people) ?? (people.length === 1 ? 'משתתף/ת אחד/ת' : `${people.length} משתתפים`)
+}
+
+/** Team ids that have saved answers, in team order. */
+export function teamIdsWithAnswers(progress: Progress): string[] {
+  const ids = new Set<string>()
+  for (const key of Object.keys(progress.responses)) {
+    const at = key.indexOf('@')
+    if (at >= 0) ids.add(key.slice(at + 1))
+  }
+  return [...ids].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }))
+}
+
+export function teamLabel(group: GroupSettings, teamId: string): string {
+  const team = group.teams.find((t) => t.id === teamId)
+  if (team) return team.name
+  const n = Number(/^t(\d+)$/.exec(teamId)?.[1])
+  return n && TEAM_LETTERS[n - 1] ? `צוות ${TEAM_LETTERS[n - 1]}` : 'צוות'
+}
+
+/** One city plan: the whole group's, or one team's. */
+export interface Board {
+  teamId: string | null
+  title: string
+  /** Short name: "צוות א" / "כל הקבוצה". */
+  label: string
+  members: string | null
+  /** Shown when this board's answers are not the ones being collected right now. */
+  note: string | null
+  responses: Responses
+}
+
+/**
+ * Every set of answers worth showing at the end. Nothing saved is ever hidden:
+ * group answers from before a split into teams, and answers of a team that was
+ * removed (fewer teams, or teams switched off), still get their own card.
+ */
+export function boards(group: GroupSettings, progress: Progress): Board[] {
+  const has = (r: Responses) => Object.keys(r).length > 0
+  const active = teamsActive(group)
+  const activeIds = active ? group.teams.map((t) => t.id) : []
+  const result: Board[] = []
+  const groupResponses = scopedResponses(progress, null)
+  if (!active || has(groupResponses))
+    result.push({
+      teamId: null,
+      title: active ? 'העיר של כל הקבוצה' : cityTitle(group),
+      label: 'כל הקבוצה',
+      members: !active && group.participants.length > 1 ? membersText(group.participants) : null,
+      note: active ? 'תשובות מלפני החלוקה לצוותים.' : null,
+      responses: groupResponses,
+    })
+  for (const id of activeIds)
+    result.push({
+      teamId: id,
+      title: `העיר של ${teamLabel(group, id)}`,
+      label: teamLabel(group, id),
+      members: membersText(teamMembers(group, id)),
+      note: null,
+      responses: scopedResponses(progress, id),
+    })
+  for (const id of teamIdsWithAnswers(progress)) {
+    if (activeIds.includes(id)) continue
+    result.push({
+      teamId: id,
+      title: `העיר של ${teamLabel(group, id)}`,
+      label: teamLabel(group, id),
+      members: null,
+      note: 'הצוות הזה כבר לא פעיל, והתשובות שלו נשמרו.',
+      responses: scopedResponses(progress, id),
+    })
+  }
+  return result
 }
 
 function planBlock(route: Route, responses: Responses, solo: boolean): string[] {
@@ -80,26 +161,27 @@ export function buildSummary(route: Route, progress: Progress, group: GroupSetti
   const people = participantsLine(group)
   const lines: string[] = [`${cityTitle(group)} · ${route.title}`, `${route.subtitle}, ${formatHebrewDate(now)}`]
   if (people) lines.push(`${solo ? 'משתתף/ת' : 'משתתפים'}: ${people}`)
+  else if (!solo) lines.push(`${group.participants.length} משתתפים`)
   lines.push(`הושלמו ${done} מתוך ${route.stations.length} תחנות`)
   if (favorite) lines.push(`התחנה האהובה: ${favorite.name}`)
   lines.push('', route.frame.disclaimer, '')
 
-  if (teamsActive(group)) {
-    for (const team of group.teams) {
-      const responses = scopedResponses(progress, team.id)
-      const members = namesLine(teamMembers(group, team.id).map((p) => personName(group, p.id)))
-      lines.push(`== ${cityTitle(group, team)} ==`)
-      if (members) lines.push(`חברי הצוות: ${members}`)
-      lines.push('', ...planBlock(route, responses, false))
-    }
+  const all = boards(group, progress)
+  const several = all.length > 1
+  for (const board of all) {
+    const boardSolo = solo && board.teamId === null
+    lines.push(several ? `== ${board.title} ==` : '== תוכנית העיר ==')
+    if (board.members) lines.push(board.teamId ? `חברי הצוות: ${board.members}` : `הצוות: ${board.members}`)
+    if (board.note) lines.push(board.note)
+    lines.push('', ...planBlock(route, board.responses, boardSolo))
+  }
+  if (several) {
     lines.push('== השוואה בין ההצעות (בלי מנצחים) ==', '')
     for (const station of route.stations) {
-      const rows = group.teams
-        .map((team) => {
-          const section = cityPlan(route, scopedResponses(progress, team.id), { includeCharter: false }).find(
-            (s) => s.station.id === station.id,
-          )
-          return section ? `${team.name}: ${section.lines.join(' · ')}` : null
+      const rows = all
+        .map((board) => {
+          const section = cityPlan(route, board.responses, { includeCharter: false }).find((s) => s.station.id === station.id)
+          return section ? `${board.title}: ${section.lines.join(' · ')}` : null
         })
         .filter((r): r is string => r !== null)
       if (rows.length) {
@@ -108,14 +190,10 @@ export function buildSummary(route: Route, progress: Progress, group: GroupSetti
         lines.push('')
       }
     }
-    for (const team of group.teams) {
-      lines.push(`== כל התשובות: ${team.name} ==`, '')
-      lines.push(...answersBlock(route, progress, scopedResponses(progress, team.id), false))
-    }
-  } else {
-    const responses = scopedResponses(progress, null)
-    lines.push(`== תוכנית העיר ==`, '', ...planBlock(route, responses, solo))
-    lines.push('== כל התשובות ==', '', ...answersBlock(route, progress, responses, solo))
+  }
+  for (const board of all) {
+    lines.push(several ? `== כל התשובות: ${board.label} ==` : '== כל התשובות ==', '')
+    lines.push(...answersBlock(route, progress, board.responses, solo && board.teamId === null))
   }
   lines.push('תודה על ההרפתקה!')
   return lines.join('\n')

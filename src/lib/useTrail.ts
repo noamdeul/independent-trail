@@ -47,15 +47,19 @@ export function useTrail(route: Route) {
   const scope = teams ? group.activeTeamId : null
   const responses = useMemo(() => scopedResponses(progress, scope), [progress, scope])
 
+  const groupLoaded = useRef(true)
+  useEffect(() => {
+    if (groupLoaded.current) {
+      groupLoaded.current = false
+      return
+    }
+    saveGroup(storage, route, group)
+    setPersistent(storage.persistent)
+  }, [storage, route, group])
+
   const setGroup = useCallback(
-    (fn: (g: GroupSettings) => GroupSettings) =>
-      setGroupState((prev) => {
-        const next = repairTeams(fn(prev))
-        saveGroup(storage, route, next)
-        setPersistent(storage.persistent)
-        return next
-      }),
-    [storage, route],
+    (fn: (g: GroupSettings) => GroupSettings) => setGroupState((prev) => repairTeams(fn(prev))),
+    [],
   )
 
   const update = useCallback((fn: (p: Progress) => Progress) => {
@@ -114,8 +118,8 @@ export function useTrail(route: Route) {
     respond,
     setText,
     visitStation,
-    openNextStep: (id: string, total: number) =>
-      updateStation(id, (s) => ({ stepsOpen: Math.min(total, (s?.stepsOpen ?? 1) + 1) })),
+    /** Opens one more step after the `shown` steps currently on screen. */
+    openNextStep: (id: string, shown: number) => updateStation(id, (s) => ({ stepsOpen: Math.max(s?.stepsOpen ?? 1, shown + 1) })),
     shiftRoles: (id: string) => updateStation(id, (s) => ({ roleShift: (s?.roleShift ?? 0) + 1 })),
     setRole: (stationId: string, teamId: string | null, roleId: string, personId: string) =>
       update((p) => {
