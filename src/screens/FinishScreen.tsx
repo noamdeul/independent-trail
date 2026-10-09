@@ -2,11 +2,10 @@ import { useRef, useState } from 'react'
 import type { Route } from '../content'
 import { Disclosure } from '../components/Disclosure'
 import { IconDownload, IconHeart, IconIceCream, IconRefresh } from '../components/Icons'
-import { personName, teamMembers } from '../lib/group'
 import { charterText, charterValues, cityPlan, findCharterStep, summarizeStep } from '../lib/plan'
-import { bonusKey, countByStatus, namesLine, nextStationId, scopedResponses, type Responses } from '../lib/progress'
+import { bonusKey, countByStatus, nextStationId, type Responses } from '../lib/progress'
 import { hrefFor, navigate } from '../lib/router'
-import { buildSummary, cityTitle, participantsLine, summaryFileName } from '../lib/summary'
+import { boards, buildSummary, cityTitle, participantsLine, summaryFileName } from '../lib/summary'
 import type { Trail } from '../lib/useTrail'
 import { useVoice } from '../lib/voice'
 
@@ -31,9 +30,11 @@ function CityCard({
   responses,
   solo,
   disclaimer,
+  note,
 }: {
   route: Route
   title: string
+  note?: string | null
   members?: string | null
   responses: Responses
   solo: boolean
@@ -51,6 +52,7 @@ function CityCard({
         {city ? `: ${city}` : ''}
       </h2>
       {members && <p className="muted">{members}</p>}
+      {note && <p className="muted small">{note}</p>}
       {plan.length === 0 ? (
         <p className="muted">עוד לא נשמרו החלטות. בכל תחנה יש שלב שנשמר בתוכנית העיר.</p>
       ) : (
@@ -117,7 +119,7 @@ function AnswersList({ route, responses, solo }: { route: Route; responses: Resp
 }
 
 export function FinishScreen({ route, trail }: { route: Route; trail: Trail }) {
-  const { progress, group, teams } = trail
+  const { progress, group } = trail
   const { solo, t } = useVoice()
   const [confirming, setConfirming] = useState(false)
   const [message, setMessage] = useState('')
@@ -134,13 +136,8 @@ export function FinishScreen({ route, trail }: { route: Route; trail: Trail }) {
     navigate({ name: 'welcome' })
   }
 
-  const teamData = teams
-    ? group.teams.map((team) => ({
-        team,
-        responses: scopedResponses(progress, team.id),
-        members: namesLine(teamMembers(group, team.id).map((p) => personName(group, p.id))),
-      }))
-    : []
+  const all = boards(group, progress)
+  const several = all.length > 1
 
   return (
     <div className="screen stack finish">
@@ -152,10 +149,12 @@ export function FinishScreen({ route, trail }: { route: Route; trail: Trail }) {
         <p className="big-count">
           <strong>{done}</strong> מתוך {total} תחנות הושלמו
         </p>
-        {people && (
+        {people ? (
           <p className="participants-line">
             {solo ? 'משתתף/ת' : 'המשתתפים'}: {people}
           </p>
+        ) : (
+          !solo && <p className="participants-line">{group.participants.length} משתתפים</p>
         )}
         {open > 0 && nextId && (
           <p className="muted">
@@ -164,38 +163,40 @@ export function FinishScreen({ route, trail }: { route: Route; trail: Trail }) {
         )}
       </div>
 
-      {teams ? (
+      {all.map((board) => (
+        <CityCard
+          key={board.teamId ?? 'all'}
+          route={route}
+          title={board.title}
+          members={board.members ? `${board.teamId ? 'חברי הצוות' : 'הצוות'}: ${board.members}` : null}
+          note={board.note}
+          responses={board.responses}
+          solo={solo && board.teamId === null}
+          disclaimer={several ? undefined : route.frame.disclaimer}
+        />
+      ))}
+      {several && (
         <>
-          {teamData.map(({ team, responses, members }) => (
-            <CityCard
-              key={team.id}
-              route={route}
-              title={cityTitle(group, team)}
-              members={members ? `חברי הצוות: ${members}` : null}
-              responses={responses}
-              solo={false}
-            />
-          ))}
           <section className="card" aria-labelledby="compare-title">
             <h2 id="compare-title" className="card-title">
               השוואה בין ההצעות
             </h2>
-            <p className="muted small">אין מנצחים. מה דומה בין הצוותים, ומה שונה?</p>
+            <p className="muted small">אין מנצחים. מה דומה בין ההצעות, ומה שונה?</p>
             <dl className="plan-list compare-list">
               {route.stations.map((station) => {
-                const rows = teamData
-                  .map(({ team, responses }) => ({
-                    team,
-                    lines: cityPlan(route, responses, { includeCharter: false }).find((s) => s.station.id === station.id)?.lines ?? [],
+                const rows = all
+                  .map((board) => ({
+                    board,
+                    lines: cityPlan(route, board.responses, { includeCharter: false }).find((s) => s.station.id === station.id)?.lines ?? [],
                   }))
                   .filter((r) => r.lines.length > 0)
                 if (rows.length === 0) return null
                 return (
                   <div key={station.id}>
                     <dt>{station.mission.planTitle}</dt>
-                    {rows.map(({ team, lines }) => (
-                      <dd key={team.id}>
-                        <strong>{team.name}:</strong> {lines.join(' · ')}
+                    {rows.map(({ board, lines }) => (
+                      <dd key={board.teamId ?? 'all'}>
+                        <strong>{board.title}:</strong> {lines.join(' · ')}
                       </dd>
                     ))}
                   </div>
@@ -205,20 +206,11 @@ export function FinishScreen({ route, trail }: { route: Route; trail: Trail }) {
           </section>
           <p className="muted small">{route.frame.disclaimer}</p>
         </>
-      ) : (
-        <CityCard
-          route={route}
-          title={cityTitle(group)}
-          members={people && !solo ? `הצוות: ${people}` : null}
-          responses={scopedResponses(progress, null)}
-          solo={solo}
-          disclaimer={route.frame.disclaimer}
-        />
       )}
 
       <section className="card celebrate" aria-labelledby="celebrate-title">
         <h2 id="celebrate-title" className="card-title">
-          <IconIceCream size={22} /> {solo ? `כל הכבוד${people ? `, ${people}` : ''}!` : 'כל הכבוד לכל הקבוצה!'}
+          <IconIceCream size={22} /> {solo ? (people ? `כל הכבוד, ${people}!` : 'כל הכבוד!') : 'כל הכבוד לכל הקבוצה!'}
         </h2>
         <p>
           {t(
@@ -252,15 +244,15 @@ export function FinishScreen({ route, trail }: { route: Route; trail: Trail }) {
         <h2 id="answers-title" className="card-title">
           {t('כל התשובות שלנו', 'כל התשובות שלי')}
         </h2>
-        {teams ? (
-          teamData.map(({ team, responses }) => (
-            <div key={team.id} className="team-answers">
-              <h3 className="subhead">{team.name}</h3>
-              <AnswersList route={route} responses={responses} solo={false} />
+        {several ? (
+          all.map((board) => (
+            <div key={board.teamId ?? 'all'} className="team-answers">
+              <h3 className="subhead">{board.label}</h3>
+              <AnswersList route={route} responses={board.responses} solo={false} />
             </div>
           ))
         ) : (
-          <AnswersList route={route} responses={scopedResponses(progress, null)} solo={solo} />
+          <AnswersList route={route} responses={all[0].responses} solo={solo} />
         )}
       </section>
 

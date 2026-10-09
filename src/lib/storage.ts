@@ -30,6 +30,8 @@ export function createStorage(): SafeStorage {
       return persistent
     },
     get(key) {
+      // Every write of this session is in memory, so it is never older than the store.
+      if (memory.has(key)) return memory.get(key) ?? null
       if (store) {
         try {
           return store.getItem(key)

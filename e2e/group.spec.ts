@@ -191,3 +191,59 @@ test('editing the group mid-route keeps answers, updates roles and survives a re
   await page.getByRole('button', { name: 'כן, למחוק' }).click()
   await expect(page.getByLabel('משתתף/ת 3', { exact: true })).toHaveValue('מאיה')
 })
+
+test('with no names typed, the end screens never show placeholder names', async ({ page }) => {
+  await page.goto('./#/finish')
+  await expect(page.locator('.participants-line')).toHaveText('3 משתתפים')
+  await expect(page.locator('.finish')).not.toContainText('משתתף/ת 1')
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: /^הורדת ״העיר שלנו״/ }).click(),
+  ])
+  expect(readFileSync((await download.path())!, 'utf8')).not.toContain('משתתף/ת 1')
+
+  await page.goto('./')
+  await setPeople(page, [''])
+  await page.goto('./#/finish')
+  await expect(page.getByRole('heading', { name: 'כל הכבוד!' })).toBeVisible()
+  await expect(page.locator('.participants-line')).toHaveCount(0)
+})
+
+test('switching level never hides a step that already has an answer', async ({ page }) => {
+  await page.getByRole('radio', { name: /קלילה/ }).check()
+  await page.getByRole('button', { name: 'מתחילים', exact: true }).click()
+  await step(page, 'אתגר תקציב').getByRole('button', { name: /^הצללה/ }).click()
+  await page.getByRole('group', { name: 'רמת הפעילות' }).getByRole('button', { name: 'רגילה' }).click()
+  await expect(page.locator('section.step h3')).toHaveText([/חיפוש ראיות/, /אתגר תקציב/])
+  await expect(step(page, 'אתגר תקציב').getByRole('button', { name: /^הצללה/ })).toHaveAttribute('aria-pressed', 'true')
+  // "next step" still opens exactly one more step
+  await nextStep(page)
+  await expect(page.locator('section.step')).toHaveCount(3)
+})
+
+test('removing a team that has answers warns first, and its answers still show at the end', async ({ page }) => {
+  await setPeople(page, ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+  await page.getByRole('radio', { name: 'צוותים של 2–4' }).check()
+  await expect(page.locator('.team-list li')).toHaveCount(3)
+  await page.getByRole('button', { name: 'מתחילים', exact: true }).click()
+  await page.getByRole('group', { name: 'הצוות שעונה עכשיו במכשיר:' }).getByRole('button', { name: 'צוות ג' }).click()
+  await nextStep(page)
+  await step(page, 'אתגר תקציב').getByRole('button', { name: /^הצללה/ }).click()
+
+  await page.goto('./#/group')
+  await expect(page.getByText(/לצוות ג כבר יש תשובות/)).toBeVisible()
+  await page.getByRole('button', { name: 'פחות צוותים' }).click()
+  await expect(page.getByText(/יש תשובות שמורות של צוות ג, שכבר לא פעיל/)).toBeVisible()
+
+  await page.goto('./#/finish')
+  await expect(page.getByRole('heading', { name: 'העיר של צוות ג' })).toBeVisible()
+  await expect(page.getByText('הצוות הזה כבר לא פעיל, והתשובות שלו נשמרו.')).toBeVisible()
+  await expect(page.getByRole('region', { name: 'השוואה בין ההצעות' })).toContainText('העיר של צוות ג: הצללה')
+
+  // adding the team back brings its answers back to it
+  await page.goto('./#/group')
+  await page.getByRole('button', { name: 'יותר צוותים' }).click()
+  await page.goto('./#/station/kiosk')
+  await page.getByRole('group', { name: 'הצוות שעונה עכשיו במכשיר:' }).getByRole('button', { name: 'צוות ג' }).click()
+  await expect(step(page, 'אתגר תקציב').getByRole('button', { name: /^הצללה/ })).toHaveAttribute('aria-pressed', 'true')
+})

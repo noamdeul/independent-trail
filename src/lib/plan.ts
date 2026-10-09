@@ -212,7 +212,9 @@ export function charterSuggestions(route: Route, responses: Responses, step: Cha
   const divideOpt =
     divideStep && 'options' in divideStep ? divideStep.options.find((o) => o.id === divideResponse?.selected?.[0]) : undefined
   const ruleField = divideStep?.fields?.find((f) => f.plan)
-  const divide = divideOpt?.phrase ?? (ruleField ? textOf(divideResponse, ruleField.id) : '') ?? ''
+  // The family's own wording wins over the generic phrase of the card they picked.
+  const typedRule = ruleField ? textOf(divideResponse, ruleField.id) : ''
+  const divide = typedRule || divideOpt?.phrase || ''
 
   return {
     principles: [principles[0] ?? '', principles[1] ?? '', principles[2] ?? ''],

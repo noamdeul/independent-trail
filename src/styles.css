@@ -1848,6 +1848,13 @@ select {
   margin-top: 8px;
 }
 
+.warn-note {
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+
 /* ---------- motion ---------- */
 
 @media (prefers-reduced-motion: reduce) {

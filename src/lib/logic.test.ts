@@ -34,7 +34,7 @@ import {
 import { hrefFor, parseHash } from './router'
 import { stationNotices } from './siteStatus'
 import { createStorage } from './storage'
-import { buildSummary } from './summary'
+import { boards, buildSummary } from './summary'
 
 const people = (n: number): Participant[] => Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: `שם${i + 1}` }))
 const groupOf = (n: number, extra: Partial<GroupSettings> = {}): GroupSettings => ({
@@ -211,6 +211,11 @@ describe('city plan and charter', () => {
       's7-charter': { text: { divide: 'צדפים, כמו ב־1909' } },
     })
     expect(charterValues(route, p.responses, charterStep).divide).toBe('צדפים, כמו ב־1909')
+  })
+
+  it('prefers the typed rule over the generic phrase of the picked card', () => {
+    const p = withResponses(createProgress(route), { 's3-rule': { selected: ['mix'], text: { rule: 'קודם צרכים, ואז הגרלה' } } })
+    expect(charterValues(route, p.responses, charterStep).divide).toBe('קודם צרכים, ואז הגרלה')
   })
 
   it('uses the typed rule when "another idea" is picked', () => {
@@ -466,7 +471,8 @@ describe('summary', () => {
     const g = { ...defaultGroup(route), participants: [{ id: 'a', name: 'דנה' }, { id: 'b', name: 'גיל' }, { id: 'c', name: '' }] }
     const text = buildSummary(route, p, g, new Date(2026, 9, 10))
     expect(text).toContain('העיר שלנו · הרפתקה בשדרה')
-    expect(text).toContain('משתתפים: דנה, גיל ומשתתף/ת 3')
+    expect(text).toContain('משתתפים: דנה וגיל')
+    expect(text).not.toContain('משתתף/ת 3')
     expect(text).toContain('הושלמו 1 מתוך 7')
     expect(text).toContain('התחנה האהובה: הקיוסק הראשון')
     expect(text).toContain(route.frame.disclaimer)
@@ -508,8 +514,33 @@ describe('summary', () => {
     expect(text).not.toMatch(/מנצח[^י]|ניקוד|מקום ראשון/)
   })
 
-  it('works with no answers at all', () => {
-    const text = buildSummary(route, createProgress(route), groupOf(3))
+  it('works with no answers and no names at all', () => {
+    const unnamed = { ...defaultGroup(route) }
+    const text = buildSummary(route, createProgress(route), unnamed)
     expect(text).toContain('עוד לא נשמרו החלטות.')
+    expect(text).toContain('3 משתתפים')
+    expect(text).not.toContain('משתתף/ת 1')
+  })
+
+  it('never hides saved answers: earlier group answers and removed teams get their own card', () => {
+    const p = withResponses(createProgress(route), {
+      's1-budget': { selected: ['shade'] },
+      's1-budget@t1': { selected: ['bench'] },
+      's1-budget@t3': { selected: ['water'] },
+    })
+    const twoTeams = repairTeams(groupOf(8, { mode: 'teams', ...autoTeams(people(8), 2) }))
+    const b = boards(twoTeams, p)
+    expect(b.map((x) => x.title)).toEqual(['העיר של כל הקבוצה', 'העיר של צוות א', 'העיר של צוות ב', 'העיר של צוות ג'])
+    expect(b[0].note).toContain('לפני החלוקה לצוותים')
+    expect(b[3].note).toContain('כבר לא פעיל')
+    expect(b[3].responses['s1-budget'].selected).toEqual(['water'])
+    // teams switched off: the group card plus every team that answered
+    const together = { ...twoTeams, mode: 'together' as const }
+    expect(boards(together, p).map((x) => x.title)).toEqual(['העיר שלנו', 'העיר של צוות א', 'העיר של צוות ג'])
+    // no team answers, no teams: just one card
+    expect(boards(groupOf(3), withResponses(createProgress(route), { 's1-budget': { selected: ['shade'] } }))).toHaveLength(1)
+    const text = buildSummary(route, p, twoTeams)
+    expect(text).toContain('== העיר של צוות ג ==')
+    expect(text).toContain('העיר של צוות ג: ברז מי שתייה')
   })
 })
