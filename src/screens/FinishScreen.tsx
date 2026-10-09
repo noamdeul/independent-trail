@@ -1,7 +1,9 @@
 import { useRef, useState } from 'react'
 import type { Route } from '../content'
 import { IconDownload, IconHeart, IconIceCream, IconRefresh } from '../components/Icons'
-import { countByStatus, familyLine, nextStationId } from '../lib/progress'
+import { Disclosure } from '../components/Disclosure'
+import { charterText, charterValues, cityPlan, findCharterStep, summarizeStep } from '../lib/plan'
+import { bonusKey, countByStatus, familyLine, nextStationId } from '../lib/progress'
 import { hrefFor, navigate } from '../lib/router'
 import { buildSummary, summaryFileName } from '../lib/summary'
 import type { Trail } from '../lib/useTrail'
@@ -29,7 +31,19 @@ export function FinishScreen({ route, trail }: { route: Route; trail: Trail }) {
   const total = route.stations.length
   const done = countByStatus(progress, 'done')
   const open = total - done
-  const withNotes = route.stations.filter((s) => progress.stations[s.id].note.trim())
+  const plan = cityPlan(route, progress, { includeCharter: false })
+  const charterStep = findCharterStep(route)
+  const charter = charterStep ? charterValues(route, progress, charterStep) : null
+  const answers = route.stations
+    .map((station) => ({
+      station,
+      steps: station.mission.steps
+        .filter((st) => st.kind !== 'charter')
+        .map((st) => ({ step: st, lines: summarizeStep(route, progress, st) }))
+        .filter((x) => x.lines.length > 0),
+      bonus: progress.responses[bonusKey(station.id)],
+    }))
+    .filter((x) => x.steps.length > 0 || x.bonus?.text?.answer?.trim() || x.bonus?.aloud)
   const nextId = nextStationId(route, progress, null)
 
   const confirmReset = () => {
@@ -56,13 +70,49 @@ export function FinishScreen({ route, trail }: { route: Route; trail: Trail }) {
         )}
       </div>
 
+      <section className="card city-card" aria-labelledby="city-title">
+        <p className="eyebrow">כרטיס</p>
+        <h2 id="city-title" className="city-title">
+          העיר שלנו{charter?.city.trim() ? `: ${charter.city.trim()}` : ''}
+        </h2>
+        {(charter?.team.trim() || family) && (
+          <p className="muted">צוות {charter?.team.trim() || family}</p>
+        )}
+        {plan.length === 0 ? (
+          <p className="muted">עוד לא נשמרו החלטות. בכל תחנה יש שלב שנשמר בתוכנית העיר.</p>
+        ) : (
+          <dl className="plan-list">
+            {plan.map((section) => (
+              <div key={section.station.id}>
+                <dt>
+                  {section.title} <span className="muted small">· {section.station.theme}</span>
+                </dt>
+                {section.lines.map((line) => (
+                  <dd key={line}>{line}</dd>
+                ))}
+              </div>
+            ))}
+          </dl>
+        )}
+        {charter && (
+          <blockquote className="charter-doc" aria-label="מגילת העיר">
+            {charterText(charter)
+              .split('\n')
+              .map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+          </blockquote>
+        )}
+        <p className="muted small">{route.frame.disclaimer}</p>
+      </section>
+
       <section className="card celebrate" aria-labelledby="celebrate-title">
         <h2 id="celebrate-title" className="card-title">
           <IconIceCream size={22} /> {family ? `כל הכבוד, ${family}!` : 'כל הכבוד לכל המשפחה!'}
         </h2>
         <p>
-          הלכתם יחד בשדרה שבה התחילה העיר, שמעתם סיפורים ופתרתם משימות כצוות. זה זמן מצוין לעצור לגלידה ולספר מה הכי
-          זכרתם.
+          הלכתם יחד בשדרה שבה התחילה העיר, גיליתם איך היא נבנתה ותכננתם עיר משלכם. זה זמן מצוין לעצור לגלידה ולספר
+          איזו החלטה הייתה הכי קשה.
         </p>
       </section>
 
@@ -88,19 +138,30 @@ export function FinishScreen({ route, trail }: { route: Route; trail: Trail }) {
 
       <section className="card" aria-labelledby="answers-title">
         <h2 id="answers-title" className="card-title">
-          מה כתבנו בדרך
+          כל התשובות שלנו
         </h2>
-        {withNotes.length === 0 ? (
-          <p className="muted">לא נכתבו תשובות הפעם. גם זה בסדר גמור.</p>
+        {answers.length === 0 ? (
+          <p className="muted">עוד אין תשובות שמורות. גם לענות בעל פה זה מצוין.</p>
         ) : (
-          <dl className="answers">
-            {withNotes.map((station) => (
-              <div key={station.id}>
-                <dt>{station.name}</dt>
-                <dd>{progress.stations[station.id].note}</dd>
-              </div>
-            ))}
-          </dl>
+          <Disclosure label={`הצגת התשובות (${answers.length} תחנות)`} openLabel="הסתרת התשובות">
+            <dl className="answers">
+              {answers.map(({ station, steps, bonus }) => (
+                <div key={station.id}>
+                  <dt>{station.name}</dt>
+                  {steps.map(({ step, lines }) => (
+                    <dd key={step.id}>
+                      <strong>{step.title}:</strong> {lines.join(' · ')}
+                    </dd>
+                  ))}
+                  {(bonus?.text?.answer?.trim() || bonus?.aloud) && (
+                    <dd>
+                      <strong>בונוס:</strong> {bonus.text?.answer?.trim() || 'ענינו בעל פה'}
+                    </dd>
+                  )}
+                </div>
+              ))}
+            </dl>
+          </Disclosure>
         )}
       </section>
 
@@ -113,7 +174,7 @@ export function FinishScreen({ route, trail }: { route: Route; trail: Trail }) {
         }}
       >
         <IconDownload size={22} />
-        <span>הורדת סיכום (קובץ טקסט)</span>
+        <span>הורדת ״העיר שלנו״ (קובץ טקסט)</span>
       </button>
 
       <section className="card danger-zone" aria-labelledby="reset-title">
@@ -122,7 +183,7 @@ export function FinishScreen({ route, trail }: { route: Route; trail: Trail }) {
         </h2>
         {!confirming ? (
           <>
-            <p className="muted small">מוחק את ההתקדמות, התשובות והתחנה האהובה. השמות נשמרים.</p>
+            <p className="muted small">מוחק את ההתקדמות, התשובות, תוכנית העיר והתחנה האהובה. השמות נשמרים.</p>
             <button
               ref={resetButton}
               type="button"

@@ -7,6 +7,7 @@ import {
   IconCheck,
   IconCompass,
   IconExternal,
+  IconEye,
   IconInfo,
   IconSkip,
   IconSwap,
@@ -15,18 +16,25 @@ import {
   StationGlyph,
 } from '../components/Icons'
 import { StatusChip } from '../components/StatusChip'
+import { AloudToggle, StepCard } from '../components/steps'
 import { walkingDirectionsUrl } from '../lib/maps'
-import { countByStatus, rolesFor } from '../lib/progress'
+import { bonusKey, countByStatus, rolesFor } from '../lib/progress'
 import { hrefFor, navigate } from '../lib/router'
 import { stationNotices } from '../lib/siteStatus'
 import { statusText } from '../lib/summary'
 import type { Trail } from '../lib/useTrail'
 
+const ROLE_ICONS: Record<string, typeof IconCompass> = {
+  navigator: IconCompass,
+  researcher: IconEye,
+  presenter: IconBook,
+}
+
 export function StationScreen({ route, trail, stationId }: { route: Route; trail: Trail; stationId: string }) {
   const index = route.stations.findIndex((s) => s.id === stationId)
   const station = route.stations[index]
   const { progress, shownNames, visitStation } = trail
-  const noteId = useId()
+  const bonusId = useId()
 
   useEffect(() => {
     if (station) visitStation(station.id)
@@ -50,6 +58,10 @@ export function StationScreen({ route, trail, stationId }: { route: Route; trail
   const total = route.stations.length
   const notices = stationNotices(station)
   const doneCount = countByStatus(progress, 'done')
+  const mission = station.mission
+  const stepsOpen = Math.min(state.stepsOpen, mission.steps.length)
+  const full = progress.mode === 'full'
+  const bonus = progress.responses[bonusKey(station.id)] ?? {}
 
   const goNext = (nextId: string | null) => {
     navigate(nextId ? { name: 'station', id: nextId } : { name: 'finish' })
@@ -90,6 +102,7 @@ export function StationScreen({ route, trail, stationId }: { route: Route; trail
             {station.name}
           </h1>
           <p className="address">{station.address}</p>
+          <p className="theme-chip">נושא: {station.theme}</p>
         </div>
       </div>
 
@@ -119,20 +132,20 @@ export function StationScreen({ route, trail, stationId }: { route: Route; trail
 
       <section className="card roles" aria-label="תפקידים בתחנה">
         <ul>
-          <li>
-            <IconCompass size={22} />
-            <span>
-              <span className="role-label">מנווט/ת</span> <strong>{roles.navigator}</strong>
-            </span>
-          </li>
-          <li>
-            <IconBook size={22} />
-            <span>
-              <span className="role-label">מקריא/ה</span> <strong>{roles.reader}</strong>
-            </span>
-          </li>
+          {roles.map((role) => {
+            const Icon = ROLE_ICONS[role.roleId] ?? IconCompass
+            return (
+              <li key={role.roleId}>
+                <Icon size={22} />
+                <span>
+                  <span className="role-label">{role.label}</span> <strong>{role.name}</strong>
+                  <span className="role-desc">{role.description}</span>
+                </span>
+              </li>
+            )
+          })}
         </ul>
-        <button type="button" className="btn btn-small btn-ghost" onClick={() => trail.swapRoles(station.id)}>
+        <button type="button" className="btn btn-small btn-ghost" onClick={() => trail.shiftRoles(station.id)}>
           <IconSwap size={20} />
           <span>החלפת תפקידים</span>
         </button>
@@ -140,39 +153,82 @@ export function StationScreen({ route, trail, stationId }: { route: Route; trail
 
       <section className="card story" aria-labelledby="story-title">
         <h2 id="story-title" className="card-title">
-          <IconBook size={20} /> הסיפור
+          <IconBook size={20} /> הסיפור בקצרה
         </h2>
         <p className="story-text">{station.story}</p>
-      </section>
-
-      <section className="card task" aria-labelledby="task-title">
-        <h2 id="task-title" className="card-title">
-          <IconBulb size={20} /> משימה משותפת
-        </h2>
-        <p className="task-text">{station.task}</p>
-
-        {station.hint && (
-          <Disclosure label="צריכים רמז?" openLabel="הסתרת הרמז" icon={<IconBulb size={20} />}>
-            <p>{station.hint}</p>
+        {full && (
+          <Disclosure label="רוצים לדעת יותר?" openLabel="הסתרת ההרחבה" icon={<IconInfo size={20} />} tone="reveal">
+            {station.more.map((p) => (
+              <p key={p.text} className={`para para-${p.kind}`}>
+                {p.kind !== 'fact' && <span className="para-badge">{p.kind === 'interpretation' ? 'פרשנות' : 'שימו לב'}</span>}
+                {p.text}
+              </p>
+            ))}
           </Disclosure>
         )}
-        <Disclosure label="מידע על המקום" openLabel="הסתרת המידע" icon={<IconInfo size={20} />} tone="reveal">
-          <p>{station.info}</p>
-          {station.creative && <p className="muted">במשימה הזו אין תשובה אחת נכונה. כל רעיון מתקבל.</p>}
-        </Disclosure>
+      </section>
 
-        <label className="field note" htmlFor={noteId}>
-          <span>מה חשבנו? (לא חובה)</span>
-        </label>
-        <textarea
-          id={noteId}
-          rows={3}
-          maxLength={2000}
-          value={state.note}
-          placeholder="אפשר לכתוב תשובה, רעיון או משהו מצחיק שקרה"
-          onChange={(e) => trail.setNote(station.id, e.target.value)}
-        />
-        <p className="muted small">נשמר אוטומטית במכשיר הזה.</p>
+      <section className="card mission" aria-labelledby="mission-title">
+        <h2 id="mission-title" className="card-title">
+          <IconBulb size={20} /> המשימה שלנו: {mission.title}
+        </h2>
+        {mission.scenario && (
+          <p className="scenario">
+            <span className="para-badge">תרחיש בדיוני</span> {mission.scenario}
+          </p>
+        )}
+        <p className="muted small">
+          {mission.steps.length} שלבים. אפשר להקליד, לבחור כרטיסים או פשוט לדבר ולסמן ״ענינו בעל פה״.
+        </p>
+
+        {mission.steps.slice(0, stepsOpen).map((step, i) => (
+          <StepCard
+            key={step.id}
+            route={route}
+            trail={trail}
+            step={step}
+            index={i}
+            stationId={station.id}
+            planTitle={mission.planTitle}
+          />
+        ))}
+
+        {stepsOpen < mission.steps.length ? (
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => trail.openNextStep(station.id, mission.steps.length)}
+          >
+            לשלב הבא: {mission.steps[stepsOpen].title}
+          </button>
+        ) : (
+          full && (
+            <section className="bonus" aria-labelledby="bonus-title">
+              <h3 id="bonus-title" className="step-title">
+                <span className="step-letter" aria-hidden="true">
+                  ★
+                </span>
+                <span>בונוס (לא חובה)</span>
+              </h3>
+              <p className="step-prompt">{mission.bonus}</p>
+              <div className="field">
+                <label htmlFor={bonusId}>התשובה שלנו</label>
+                <input
+                  id={bonusId}
+                  type="text"
+                  maxLength={300}
+                  autoComplete="off"
+                  value={bonus.text?.answer ?? ''}
+                  onChange={(e) => trail.setText(bonusKey(station.id), 'answer', e.target.value)}
+                />
+              </div>
+              <AloudToggle
+                pressed={!!bonus.aloud}
+                onToggle={() => trail.respond(bonusKey(station.id), { aloud: !bonus.aloud })}
+              />
+            </section>
+          )
+        )}
       </section>
 
       <div className="actionbar">

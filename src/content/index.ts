@@ -1,7 +1,7 @@
 import { independenceShort } from './independence-short'
 import type { Route } from './types'
 
-export type { Route, Station, SiteStatus, SiteStatusCode, StationIcon, VisitType } from './types'
+export type * from './types'
 
 /** All available routes. Add a new route file and list it here. */
 export const routes: Route[] = [independenceShort]

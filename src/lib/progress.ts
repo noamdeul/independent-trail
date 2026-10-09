@@ -1,13 +1,35 @@
-import type { Route } from '../content'
+import type { Route, Station } from '../content'
 import { readJson, type SafeStorage } from './storage'
 
 export type StationStatus = 'pending' | 'done' | 'skipped'
+export type ModeId = 'full' | 'light'
 
 export interface StationProgress {
   status: StationStatus
-  note: string
-  /** Manual swap of the navigator / reader roles at this station. */
-  rolesSwapped: boolean
+  /** How many mission steps are revealed (steps appear one at a time). */
+  stepsOpen: number
+  /** Manual role rotation at this station (0–2). */
+  roleShift: number
+}
+
+/** Everything a family did in one mission step. All parts are optional. */
+export interface StepResponse {
+  /** "ענינו בעל פה" – answered out loud, nothing typed. */
+  aloud?: boolean
+  /** Free text by key (field id, "item0", "seen1", "think1", "full:pro", "followUp"…). */
+  text?: Record<string, string>
+  /** Observation rows marked "לא מצאנו". */
+  notFound?: string[]
+  selected?: string[]
+  order?: string[]
+  /** Card id → category / item id → target. */
+  assign?: Record<string, string>
+  lottery?: Record<string, string>
+  hints?: number
+  solved?: boolean
+  announced?: boolean
+  followHints?: number
+  followSolved?: boolean
 }
 
 export interface Names {
@@ -16,30 +38,37 @@ export interface Names {
 }
 
 export interface Progress {
-  version: 1
+  version: 2
   routeId: string
   started: boolean
+  mode: ModeId
   currentStationId: string | null
   stations: Record<string, StationProgress>
+  /** Keyed by step id, or `${stationId}:bonus` for bonus answers. */
+  responses: Record<string, StepResponse>
   favoriteStationId: string | null
   updatedAt: string | null
 }
 
-const SCHEMA = 'v1'
+const SCHEMA = 'v2'
 export const progressKey = (routeId: string) => `shdera:${SCHEMA}:progress:${routeId}`
-export const namesKey = (routeId: string) => `shdera:${SCHEMA}:names:${routeId}`
+// Names did not change shape, so they keep the v1 key.
+export const namesKey = (routeId: string) => `shdera:v1:names:${routeId}`
+export const bonusKey = (stationId: string) => `${stationId}:bonus`
 
 export function emptyStation(): StationProgress {
-  return { status: 'pending', note: '', rolesSwapped: false }
+  return { status: 'pending', stepsOpen: 1, roleShift: 0 }
 }
 
 export function createProgress(route: Route): Progress {
   return {
-    version: 1,
+    version: 2,
     routeId: route.id,
     started: false,
+    mode: 'full',
     currentStationId: null,
     stations: Object.fromEntries(route.stations.map((s) => [s.id, emptyStation()])),
+    responses: {},
     favoriteStationId: null,
     updatedAt: null,
   }
@@ -47,28 +76,73 @@ export function createProgress(route: Route): Progress {
 
 const STATUSES: StationStatus[] = ['pending', 'done', 'skipped']
 const isString = (v: unknown): v is string => typeof v === 'string'
+const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
+const clampInt = (v: unknown, min: number, max: number, fallback: number) =>
+  typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, Math.round(v))) : fallback
+
+function stringRecord(v: unknown, maxLen = 2000): Record<string, string> | undefined {
+  if (!isObject(v)) return undefined
+  const out: Record<string, string> = {}
+  for (const [k, val] of Object.entries(v)) if (isString(val)) out[k.slice(0, 80)] = val.slice(0, maxLen)
+  return out
+}
+
+function stringList(v: unknown): string[] | undefined {
+  return Array.isArray(v) ? v.filter(isString).slice(0, 50) : undefined
+}
+
+function normalizeResponse(v: unknown): StepResponse | null {
+  if (!isObject(v)) return null
+  const r: StepResponse = {}
+  if (v.aloud === true) r.aloud = true
+  if (v.solved === true) r.solved = true
+  if (v.announced === true) r.announced = true
+  if (v.followSolved === true) r.followSolved = true
+  const text = stringRecord(v.text)
+  if (text) r.text = text
+  const notFound = stringList(v.notFound)
+  if (notFound) r.notFound = notFound
+  const selected = stringList(v.selected)
+  if (selected) r.selected = selected
+  const order = stringList(v.order)
+  if (order) r.order = order
+  const assign = stringRecord(v.assign, 80)
+  if (assign) r.assign = assign
+  const lottery = stringRecord(v.lottery, 80)
+  if (lottery) r.lottery = lottery
+  if (v.hints !== undefined) r.hints = clampInt(v.hints, 0, 2, 0)
+  if (v.followHints !== undefined) r.followHints = clampInt(v.followHints, 0, 2, 0)
+  return r
+}
 
 /** Merges stored data with the current route, dropping anything that no longer fits. */
 export function normalizeProgress(route: Route, raw: unknown): Progress {
   const base = createProgress(route)
-  if (!raw || typeof raw !== 'object') return base
-  const data = raw as Partial<Progress>
-  if (data.version !== 1) return base
+  if (!isObject(raw) || raw.version !== 2) return base
   const ids = new Set(route.stations.map((s) => s.id))
+  const stepIds = new Set(route.stations.flatMap((s) => [...s.mission.steps.map((st) => st.id), bonusKey(s.id)]))
 
-  for (const id of ids) {
-    const stored = data.stations?.[id] as Partial<StationProgress> | undefined
-    if (!stored || typeof stored !== 'object') continue
-    base.stations[id] = {
+  const stations = isObject(raw.stations) ? raw.stations : {}
+  for (const station of route.stations) {
+    const stored = stations[station.id]
+    if (!isObject(stored)) continue
+    base.stations[station.id] = {
       status: STATUSES.includes(stored.status as StationStatus) ? (stored.status as StationStatus) : 'pending',
-      note: isString(stored.note) ? stored.note.slice(0, 2000) : '',
-      rolesSwapped: stored.rolesSwapped === true,
+      stepsOpen: clampInt(stored.stepsOpen, 1, station.mission.steps.length, 1),
+      roleShift: clampInt(stored.roleShift, 0, 2, 0),
     }
   }
-  base.started = data.started === true
-  base.currentStationId = isString(data.currentStationId) && ids.has(data.currentStationId) ? data.currentStationId : null
-  base.favoriteStationId = isString(data.favoriteStationId) && ids.has(data.favoriteStationId) ? data.favoriteStationId : null
-  base.updatedAt = isString(data.updatedAt) ? data.updatedAt : null
+  const responses = isObject(raw.responses) ? raw.responses : {}
+  for (const [id, value] of Object.entries(responses)) {
+    if (!stepIds.has(id)) continue
+    const r = normalizeResponse(value)
+    if (r) base.responses[id] = r
+  }
+  base.started = raw.started === true
+  base.mode = raw.mode === 'light' ? 'light' : 'full'
+  base.currentStationId = isString(raw.currentStationId) && ids.has(raw.currentStationId) ? raw.currentStationId : null
+  base.favoriteStationId = isString(raw.favoriteStationId) && ids.has(raw.favoriteStationId) ? raw.favoriteStationId : null
+  base.updatedAt = isString(raw.updatedAt) ? raw.updatedAt : null
   return base
 }
 
@@ -123,7 +197,8 @@ export function familyLine(names: Names): string | null {
 export function hasProgress(progress: Progress): boolean {
   return (
     progress.started ||
-    Object.values(progress.stations).some((s) => s.status !== 'pending' || s.note.trim() !== '')
+    Object.values(progress.stations).some((s) => s.status !== 'pending') ||
+    Object.keys(progress.responses).length > 0
   )
 }
 
@@ -153,15 +228,39 @@ export function resumeStationId(route: Route, progress: Progress): string | null
   return skipped ? skipped.id : null
 }
 
-export interface Roles {
-  navigator: string
-  reader: string
+export interface RoleAssignment {
+  roleId: string
+  label: string
+  description: string
+  name: string
 }
 
-/** Kids alternate roles station by station; a manual swap flips that station. */
-export function rolesFor(route: Route, progress: Progress, names: Names, stationId: string): Roles {
+/**
+ * Three roles rotate between the two kids and the parent, one step per
+ * station; a manual shift rotates them again at that station.
+ */
+export function rolesFor(route: Route, progress: Progress, names: Names, stationId: string): RoleAssignment[] {
   const index = Math.max(0, route.stations.findIndex((s) => s.id === stationId))
-  const swapped = progress.stations[stationId]?.rolesSwapped === true
-  const first = (index % 2 === 0) !== swapped ? 0 : 1
-  return { navigator: names.kids[first], reader: names.kids[1 - first] }
+  const shift = progress.stations[stationId]?.roleShift ?? 0
+  const people = [names.kids[0], names.kids[1], names.parent]
+  return route.roles.map((role, r) => ({
+    roleId: role.id,
+    label: role.label,
+    description: role.description,
+    name: people[(r + index + shift) % people.length],
+  }))
+}
+
+/** True when a step has any answer: typed, picked, ordered, or answered out loud. */
+export function isStepAnswered(response: StepResponse | undefined): boolean {
+  if (!response) return false
+  if (response.aloud) return true
+  if (response.selected?.length || response.order?.length || response.notFound?.length) return true
+  if (response.assign && Object.keys(response.assign).length) return true
+  if (response.lottery && Object.keys(response.lottery).length) return true
+  return Object.values(response.text ?? {}).some((t) => t.trim() !== '')
+}
+
+export function stationOf(route: Route, stepId: string): Station | undefined {
+  return route.stations.find((s) => s.mission.steps.some((st) => st.id === stepId))
 }

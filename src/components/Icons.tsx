@@ -144,6 +144,11 @@ export const IconRefresh = (p: IconProps) => (
     <path d="M20 12a8 8 0 11-2.3-5.6M20 4v5h-5" />
   </Svg>
 )
+export const IconPencil = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 20l1-4L16 5l3 3L8 19l-4 1zM14 7l3 3" />
+  </Svg>
+)
 export const IconExternal = (p: IconProps) => (
   <Svg {...p}>
     <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5" />

@@ -9,9 +9,11 @@ import {
   progressKey,
   saveNames,
   saveProgress,
+  type ModeId,
   type Names,
   type Progress,
   type StationProgress,
+  type StepResponse,
 } from './progress'
 import { createStorage } from './storage'
 
@@ -36,9 +38,26 @@ export function useTrail(route: Route) {
   }, [])
 
   const updateStation = useCallback(
-    (id: string, patch: Partial<StationProgress>) =>
-      update((p) => ({ ...p, stations: { ...p.stations, [id]: { ...p.stations[id], ...patch } } })),
+    (id: string, fn: (s: StationProgress) => Partial<StationProgress>) =>
+      update((p) => ({ ...p, stations: { ...p.stations, [id]: { ...p.stations[id], ...fn(p.stations[id]) } } })),
     [update],
+  )
+
+  /** Merge a patch into one step's response. Functional so rapid edits never race. */
+  const respond = useCallback(
+    (stepId: string, patch: StepResponse | ((r: StepResponse) => StepResponse)) =>
+      update((p) => {
+        const prev = p.responses[stepId] ?? {}
+        const next = typeof patch === 'function' ? patch(prev) : { ...prev, ...patch }
+        return { ...p, responses: { ...p.responses, [stepId]: next } }
+      }),
+    [update],
+  )
+
+  const setText = useCallback(
+    (stepId: string, key: string, value: string) =>
+      respond(stepId, (r) => ({ ...r, text: { ...r.text, [key]: value } })),
+    [respond],
   )
 
   const setNames = useCallback(
@@ -50,28 +69,15 @@ export function useTrail(route: Route) {
     [storage, route],
   )
 
-  const visitStation = useCallback(
-    (id: string) => {
-      setProgress((p) => (p.currentStationId === id && p.started ? p : { ...p, started: true, currentStationId: id }))
-    },
-    [],
-  )
+  const visitStation = useCallback((id: string) => {
+    setProgress((p) => (p.currentStationId === id && p.started ? p : { ...p, started: true, currentStationId: id }))
+  }, [])
 
-  /** Marks a station and returns the id of the next station to visit, or null. */
-  const complete = useCallback(
-    (id: string): string | null => {
-      const after: Progress = { ...progress, stations: { ...progress.stations, [id]: { ...progress.stations[id], status: 'done' } } }
-      updateStation(id, { status: 'done' })
-      return nextStationId(route, after, id)
-    },
-    [progress, route, updateStation],
-  )
-
-  const skip = useCallback(
-    (id: string): string | null => {
-      const status = progress.stations[id]?.status === 'done' ? 'done' : 'skipped'
-      const after: Progress = { ...progress, stations: { ...progress.stations, [id]: { ...progress.stations[id], status } } }
-      updateStation(id, { status })
+  const markAndNext = useCallback(
+    (id: string, status: 'done' | 'skipped'): string | null => {
+      const final = status === 'skipped' && progress.stations[id]?.status === 'done' ? 'done' : status
+      const after: Progress = { ...progress, stations: { ...progress.stations, [id]: { ...progress.stations[id], status: final } } }
+      updateStation(id, () => ({ status: final }))
       return nextStationId(route, after, id)
     },
     [progress, route, updateStation],
@@ -79,7 +85,7 @@ export function useTrail(route: Route) {
 
   const reset = useCallback(() => {
     storage.remove(progressKey(route.id))
-    setProgress(createProgress(route))
+    setProgress((p) => ({ ...createProgress(route), mode: p.mode }))
   }, [storage, route])
 
   return {
@@ -89,11 +95,15 @@ export function useTrail(route: Route) {
     persistent,
     setNames,
     visitStation,
-    setNote: (id: string, note: string) => updateStation(id, { note }),
-    swapRoles: (id: string) => updateStation(id, { rolesSwapped: !progress.stations[id]?.rolesSwapped }),
-    reopen: (id: string) => updateStation(id, { status: 'pending' }),
-    complete,
-    skip,
+    respond,
+    setText,
+    setMode: (mode: ModeId) => update((p) => ({ ...p, mode })),
+    openNextStep: (id: string, total: number) =>
+      updateStation(id, (s) => ({ stepsOpen: Math.min(total, (s?.stepsOpen ?? 1) + 1) })),
+    shiftRoles: (id: string) => updateStation(id, (s) => ({ roleShift: ((s?.roleShift ?? 0) + 1) % 3 })),
+    reopen: (id: string) => updateStation(id, () => ({ status: 'pending' })),
+    complete: (id: string) => markAndNext(id, 'done'),
+    skip: (id: string) => markAndNext(id, 'skipped'),
     setFavorite: (id: string) => update((p) => ({ ...p, favoriteStationId: id })),
     reset,
   }
