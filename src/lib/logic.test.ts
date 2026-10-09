@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { independenceShort as route } from '../content/independence-short'
 import { walkingDirectionsUrl } from './maps'
+import { stationNotices } from './siteStatus'
 import {
   createProgress,
   loadNames,
@@ -33,18 +34,29 @@ describe('route content', () => {
       'הקיוסק הראשון',
       'מזרקת הפסיפס של נחום גוטמן',
       'בית עקיבא אריה ויס',
-      'הגימנסיה הרצליה ומגדל שלום',
+      'מקום הגימנסיה הרצליה, כיום מגדל שלום',
       'האנדרטה למייסדי העיר',
       'פסל מאיר דיזנגוף',
-      'היכל העצמאות',
+      'בית העצמאות / היכל העצמאות',
     ])
     expect(new Set(route.stations.map((s) => s.id)).size).toBe(7)
   })
 
-  it('keeps the Independence Hall status and check date in separate fields', () => {
+  it('keeps the Independence Hall visit type, status and check date in separate fields', () => {
     const hall = route.stations.find((s) => s.id === 'independence-hall')!
-    expect(hall.siteStatus).toMatchObject({ code: 'closed-renovation', checkedOn: '2026-10-09' })
-    expect(hall.outsideOnly).toBe(true)
+    expect(hall.visitType).toBe('exterior')
+    expect(hall.siteStatus).toMatchObject({ status: 'closed_for_renovation', lastChecked: '2026-10-09' })
+    expect(stationNotices(hall).map((n) => n.text).join(' ')).toBe(
+      'היכל העצמאות סגור לשיפוצים לפי הבדיקה מ־9.10.2026. בתחנה זו עוצרים מחוץ לבניין.',
+    )
+  })
+
+  it('builds map queries from the station name and address, without coordinates', () => {
+    for (const s of route.stations) {
+      expect(s.mapsQuery, s.id).toMatch(/תל אביב$/)
+      expect(s.mapsQuery, s.id).not.toMatch(/\d+\.\d{3,}/)
+    }
+    expect(route.stations[0].mapsQuery).toBe('הקיוסק הראשון, שדרות רוטשילד פינת הרצל, תל אביב')
   })
 
   it('has short stories (2–4 sentences)', () => {

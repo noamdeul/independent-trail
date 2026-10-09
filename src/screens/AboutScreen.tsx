@@ -1,6 +1,7 @@
 import type { Route } from '../content'
 import { IconExternal, IconWarning } from '../components/Icons'
 import { hrefFor } from '../lib/router'
+import { EXTERIOR_MESSAGE, siteStatusMessage } from '../lib/siteStatus'
 import { formatIsoDate } from '../lib/summary'
 import type { OfflineState } from '../lib/useOfflineReady'
 
@@ -30,10 +31,8 @@ export function AboutScreen({ route, offline }: { route: Route; offline: Offline
           <div>
             {statusStations.map((s) => (
               <p key={s.id}>
-                <strong>
-                  {s.name}: {s.siteStatus!.label}
-                </strong>
-                , לפי מידע שנבדק ב־{formatIsoDate(s.siteStatus!.checkedOn)}. העצירה מתוכננת מבחוץ בלבד.
+                <strong>{siteStatusMessage(s.siteStatus!)}</strong>
+                {s.visitType === 'exterior' && ` ${EXTERIOR_MESSAGE}`}
               </p>
             ))}
           </div>
@@ -51,9 +50,23 @@ export function AboutScreen({ route, offline }: { route: Route; offline: Offline
         </ul>
       </section>
 
+      <section className="card" aria-labelledby="other-title">
+        <h2 id="other-title" className="card-title">
+          שלוש התחנות שלא נכללו
+        </h2>
+        <p className="muted small">{route.about.otherStationsNote}</p>
+        <ul className="bullets">
+          {route.about.otherStations.map((p) => (
+            <li key={p.name}>
+              {p.name}: {p.address}
+            </li>
+          ))}
+        </ul>
+      </section>
+
       <section className="card" aria-labelledby="sources-title">
         <h2 id="sources-title" className="card-title">
-          מקורות
+          מקורות לקריאה נוספת
         </h2>
         <ul className="links">
           {route.about.sources.map((s) => (
@@ -66,13 +79,13 @@ export function AboutScreen({ route, offline }: { route: Route; offline: Offline
             </li>
           ))}
         </ul>
-        <h3 className="subhead">מה לא אומת</h3>
+        <h3 className="subhead">מה לא אומת או עשוי להשתנות</h3>
         <ul className="bullets">
           {route.about.unverified.map((u) => (
             <li key={u}>{u}</li>
           ))}
         </ul>
-        <p className="muted small">תוכן המסלול עודכן לאחרונה: {formatIsoDate(route.about.contentCheckedOn)}.</p>
+        <p className="muted small">תאריך בדיקת המידע: {formatIsoDate(route.about.contentCheckedOn)}.</p>
       </section>
 
       <section className="card" aria-labelledby="offline-title">

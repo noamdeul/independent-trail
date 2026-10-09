@@ -55,6 +55,9 @@ test('full family flow: names, roles, complete, skip, refresh, revisit, finish, 
   await expect(page).toHaveURL(/#\/station\/kiosk$/)
   await expect(page.getByText('תחנה 1 מתוך 7')).toBeVisible()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('הקיוסק הראשון')
+  await expect(page.getByText('מהמסעדה הולכים ברחוב הרצל עד המפגש עם שדרות רוטשילד.')).toBeVisible()
+  await expect(page.locator('.story-text')).toContainText('בשנת 1910 נפתח כאן הקיוסק הראשון')
+  await expect(page.locator('.task-text')).toHaveText('אתם פותחים קיוסק בעיר חדשה. בחרו לו שם ושלושה דברים שתמכרו בו.')
   const roles = page.getByRole('region', { name: 'תפקידים בתחנה' })
   await expect(roles).toContainText('מנווט/ת עומרי')
   await expect(roles).toContainText('מקריא/ה אלה מאיה')
@@ -62,10 +65,11 @@ test('full family flow: names, roles, complete, skip, refresh, revisit, finish, 
   await expect(roles).toContainText('מנווט/ת אלה מאיה')
 
   // Reveal is hidden until asked for; no hint on this creative station
-  await expect(page.getByText('כל שם וכל רשימה מתאימים')).toHaveCount(0)
+  await expect(page.getByText(/ומכר גזוז בשלל טעמים/)).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'צריכים רמז?' })).toHaveCount(0)
-  await page.getByRole('button', { name: 'הסבר ורעיונות' }).click()
-  await expect(page.getByText(/כל שם וכל רשימה מתאימים/)).toBeVisible()
+  await page.getByRole('button', { name: 'מידע על המקום' }).click()
+  await expect(page.getByText(/ומכר גזוז בשלל טעמים/)).toBeVisible()
+  await expect(page.getByText('במשימה הזו אין תשובה אחת נכונה. כל רעיון מתקבל.')).toBeVisible()
 
   await page.getByLabel('מה חשבנו? (לא חובה)').fill('קיוסק הגזוז של השדרה: גזוז, ארטיק, מים')
   await expectNoHorizontalScroll(page)
@@ -113,8 +117,9 @@ test('full family flow: names, roles, complete, skip, refresh, revisit, finish, 
   for (let i = 3; i <= 7; i++) {
     await expect(page.getByText(`תחנה ${i} מתוך 7`)).toBeVisible()
     if (i === 7) {
-      await expect(page.getByText('היכל העצמאות: סגור לשיפוצים')).toBeVisible()
-      await expect(page.getByText('התחנה מתוכננת לביקור מבחוץ בלבד.')).toBeVisible()
+      await expect(page.getByRole('note')).toHaveText(
+        'היכל העצמאות סגור לשיפוצים לפי הבדיקה מ־9.10.2026.בתחנה זו עוצרים מחוץ לבניין.',
+      )
       await page.getByLabel('מה חשבנו? (לא חובה)').fill('"נולדה מדינה!" ושאלה: מה הרגשת?')
       await snap(page, '04-station-7')
     }
@@ -170,19 +175,22 @@ test('navigation links open Google Maps walking directions with Hebrew queries',
   expect(url.origin + url.pathname).toBe('https://www.google.com/maps/dir/')
   expect(url.searchParams.get('api')).toBe('1')
   expect(url.searchParams.get('travelmode')).toBe('walking')
-  expect(url.searchParams.get('destination')).toBe('שדרות רוטשילד 10, תל אביב-יפו')
+  expect(url.searchParams.get('destination')).toBe('הקיוסק הראשון, שדרות רוטשילד פינת הרצל, תל אביב')
   expect(href).not.toMatch(/[֐-׿]/)
 
   await page.goto('./#/station/independence-hall')
   const hall = new URL((await page.getByRole('link', { name: /ניווט בהליכה/ }).getAttribute('href'))!)
-  expect(hall.searchParams.get('destination')).toBe('היכל העצמאות, שדרות רוטשילד 16, תל אביב-יפו')
+  expect(hall.searchParams.get('destination')).toBe('היכל העצמאות, שדרות רוטשילד 16, תל אביב')
 })
 
 test('about screen lists sources, cautions and what was not verified', async ({ page }) => {
   await page.getByRole('link', { name: 'על המסלול ומקורות' }).click()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('על המסלול ומקורות')
   await expect(page.getByText(/זה לא המסלול הרשמי המלא/)).toBeVisible()
-  await expect(page.getByText(/פס הסימון/)).toBeVisible()
+  await expect(page.getByText(/ייתכן שהסימון לא רציף/)).toBeVisible()
+  await expect(page.getByText('בית הכנסת הגדול: אלנבי 110')).toBeVisible()
+  await expect(page.locator('a[href*="apps.apple.com"]')).toBeVisible()
+  await expect(page.getByText(/ללא תשלום/)).toBeVisible()
   await expect(page.getByRole('heading', { name: 'מה לא אומת' })).toBeVisible()
   await expect(page.locator('a[href*="tel-aviv.gov.il"]')).toBeVisible()
   await expectNoHorizontalScroll(page)
@@ -209,7 +217,7 @@ test('works under the repository path and offline after the first visit', async 
   await expect(page.getByText('תחנה 1 מתוך 7')).toBeVisible()
   await expect(page.getByText(/בשנת 1910/)).toBeVisible()
   await page.goto('./#/station/independence-hall')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('היכל העצמאות')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('בית העצמאות / היכל העצמאות')
   await snap(page, '07-offline')
   await context.setOffline(false)
 })

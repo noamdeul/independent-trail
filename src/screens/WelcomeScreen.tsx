@@ -61,8 +61,10 @@ export function WelcomeScreen({ route, trail }: { route: Route; trail: Trail }) 
             <IconTree size={20} /> נקודת יציאה
           </h2>
           <p>
-            אחרי ארוחת צהריים ב{route.meetingPoint.name}, {route.meetingPoint.address}. התחנה הראשונה: {first.name}.
+            אחרי ארוחת צהריים ב{route.meetingPoint.name}, {route.meetingPoint.address}.
           </p>
+          <p>{route.meetingPoint.walkToStart}</p>
+          <p className="muted small">התחנה הראשונה: {first.name}.</p>
         </section>
 
         <section className="card" aria-labelledby="names-title">

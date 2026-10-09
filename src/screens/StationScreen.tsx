@@ -7,7 +7,7 @@ import {
   IconCheck,
   IconCompass,
   IconExternal,
-  IconEye,
+  IconInfo,
   IconSkip,
   IconSwap,
   IconWalk,
@@ -18,7 +18,8 @@ import { StatusChip } from '../components/StatusChip'
 import { walkingDirectionsUrl } from '../lib/maps'
 import { countByStatus, rolesFor } from '../lib/progress'
 import { hrefFor, navigate } from '../lib/router'
-import { formatIsoDate, statusText } from '../lib/summary'
+import { stationNotices } from '../lib/siteStatus'
+import { statusText } from '../lib/summary'
 import type { Trail } from '../lib/useTrail'
 
 export function StationScreen({ route, trail, stationId }: { route: Route; trail: Trail; stationId: string }) {
@@ -47,6 +48,7 @@ export function StationScreen({ route, trail, stationId }: { route: Route; trail
   const state = progress.stations[station.id]
   const roles = rolesFor(route, progress, shownNames, station.id)
   const total = route.stations.length
+  const notices = stationNotices(station)
   const doneCount = countByStatus(progress, 'done')
 
   const goNext = (nextId: string | null) => {
@@ -104,20 +106,13 @@ export function StationScreen({ route, trail, stationId }: { route: Route; trail
       </a>
       {station.directions && <p className="directions">{station.directions}</p>}
 
-      {(station.siteStatus || station.outsideOnly || station.note) && (
+      {notices.length > 0 && (
         <div className="notice" role="note">
           <IconWarning size={22} />
           <div>
-            {station.siteStatus && (
-              <p>
-                <strong>
-                  {station.name}: {station.siteStatus.label}
-                </strong>{' '}
-                (לפי מידע מ־{formatIsoDate(station.siteStatus.checkedOn)}).
-              </p>
-            )}
-            {station.outsideOnly && <p>התחנה מתוכננת לביקור מבחוץ בלבד.</p>}
-            {station.note && <p>{station.note}</p>}
+            {notices.map((line) => (
+              <p key={line.text}>{line.strong ? <strong>{line.text}</strong> : line.text}</p>
+            ))}
           </div>
         </div>
       )}
@@ -161,15 +156,9 @@ export function StationScreen({ route, trail, stationId }: { route: Route; trail
             <p>{station.hint}</p>
           </Disclosure>
         )}
-        <Disclosure
-          label={station.creative ? 'הסבר ורעיונות' : 'תשובה והסבר'}
-          openLabel="הסתרת ההסבר"
-          icon={<IconEye size={20} />}
-          tone="reveal"
-        >
-          <p>
-            <strong>{station.reveal.title}.</strong> {station.reveal.text}
-          </p>
+        <Disclosure label="מידע על המקום" openLabel="הסתרת המידע" icon={<IconInfo size={20} />} tone="reveal">
+          <p>{station.info}</p>
+          {station.creative && <p className="muted">במשימה הזו אין תשובה אחת נכונה. כל רעיון מתקבל.</p>}
         </Disclosure>
 
         <label className="field note" htmlFor={noteId}>

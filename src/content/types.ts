@@ -3,48 +3,54 @@
 
 export type StationIcon = 'kiosk' | 'fountain' | 'house' | 'tower' | 'monument' | 'horse' | 'hall'
 
-/** Status of a physical site, kept separate from the check date so both can be updated. */
+/** How the stop is planned. "exterior" = we stay outside the building. */
+export type VisitType = 'exterior' | 'interior'
+
+export type SiteStatusCode = 'closed_for_renovation' | 'open'
+
+/** Status of a physical site. Status and check date are separate so each can be updated alone. */
 export interface SiteStatus {
-  /** e.g. "closed-renovation". Free text key, UI shows `label`. */
-  code: string
-  label: string
-  /** ISO date (YYYY-MM-DD) on which the status was last checked. */
-  checkedOn: string
+  status: SiteStatusCode
+  /** Short name used in the notice, e.g. "היכל העצמאות". */
+  placeName: string
+  /** ISO date (YYYY-MM-DD) of the last check. */
+  lastChecked: string
   sourceUrl?: string
 }
 
 export interface Station {
   id: string
   name: string
-  /** Address shown to the family, as written in the source. */
+  /** Address shown to the family. */
   address: string
-  /** Search string for Google Maps. Address-based, never invented coordinates. */
+  /** Google Maps search string: station name + address. Never coordinates. */
   mapsQuery: string
   icon: StationIcon
-  /** Verified walking directions only. Leave undefined when not verified. */
+  /** Verified walking directions only. Leave undefined when there are none. */
   directions?: string
+  /** Background facts about the place, shown on request. */
+  info: string
   /** 2–4 short sentences, about 30 seconds read aloud. */
   story: string
   task: string
   /** Only where a hint actually helps. */
   hint?: string
-  /** Shown separately, so the solution is never visible up front. */
-  reveal: {
-    title: string
-    text: string
-  }
-  /** Creative tasks have no single right answer. */
+  /** Creative tasks have no single right answer and never show one. */
   creative: boolean
   /** Short practical note, e.g. "the fountain may be off". */
   note?: string
-  /** True when the stop is planned from the outside only. */
-  outsideOnly?: boolean
+  visitType?: VisitType
   siteStatus?: SiteStatus
 }
 
 export interface SourceLink {
   label: string
   url: string
+}
+
+export interface PlaceRef {
+  name: string
+  address: string
 }
 
 export interface Route {
@@ -56,13 +62,17 @@ export interface Route {
   meetingPoint: {
     name: string
     address: string
-    mapsQuery: string
+    /** Verified way from the meeting point to the first station. */
+    walkToStart: string
   }
   reminders: string[]
   stations: Station[]
   about: {
     paragraphs: string[]
     cautions: string[]
+    /** Official stations not included in this short route, for context only. */
+    otherStations: PlaceRef[]
+    otherStationsNote: string
     sources: SourceLink[]
     unverified: string[]
     contentCheckedOn: string
