@@ -210,6 +210,8 @@ export interface StationMedia {
 export interface Station {
   id: string
   name: string
+  /** Number of this stop on the official 10-station trail (and its map). */
+  officialNumber?: number
   /** One of the city themes, e.g. "מקום מפגש". */
   theme: string
   address: string
@@ -273,6 +275,16 @@ export interface Route {
   levels: Level[]
   /** Where the activity starts (a public place). */
   startPoint: string
+  /** Illustrated trail map, bundled with the app so it also works offline. */
+  map?: {
+    src: string
+    width: number
+    height: number
+    alt: string
+    caption: string
+    /** Who made the map and the permission to use it, once known. */
+    credit?: string
+  }
   /** The official trail app, used for the video and narration of each station. */
   officialApp?: {
     name: string

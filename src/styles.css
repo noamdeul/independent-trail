@@ -1932,3 +1932,72 @@ select {
   flex-direction: column;
   gap: 8px;
 }
+
+/* ---------- trail map ---------- */
+
+.trail-map {
+  margin: 0;
+  padding: 8px;
+  gap: 8px;
+}
+
+.trail-map-link {
+  display: block;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.trail-map img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.trail-map figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 6px 4px;
+  font-size: 0.95rem;
+}
+
+.trail-map-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  font-weight: 700;
+}
+
+.station-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.station-tags .theme-chip {
+  margin-top: 0;
+}
+
+.map-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: var(--sand-200);
+  color: var(--ink);
+}
+
+.chip-map {
+  background: var(--blue-100);
+  color: var(--blue-800);
+}
+
+.tap-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 700;
+}

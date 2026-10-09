@@ -1,3 +1,4 @@
+import trailMap from '../assets/trail-map.webp'
 import type { Route } from './types'
 
 // "איך בונים עיר?" – a short route for any group size on the Independence Trail.
@@ -43,6 +44,13 @@ export const independenceShort: Route = {
     },
   ],
   startPoint: 'הפעילות מתחילה במפגש רחוב הרצל ושדרות רוטשילד.',
+  map: {
+    src: trailMap,
+    width: 1179,
+    height: 834,
+    alt: 'מפה מאוירת של שביל העצמאות: עשר תחנות ממוספרות לאורך שדרות רוטשילד והרחובות הסמוכים, עם קו המסלול ביניהן.',
+    caption: 'מפת שביל העצמאות המלא, 10 תחנות. המספרים במפה הם של המסלול הרשמי. במסלול המקוצר שלנו יש 7 מהן.',
+  },
   officialApp: {
     name: 'שביל העצמאות',
     storeUrl: 'https://apps.apple.com/il/app/id1422469642',
@@ -61,6 +69,7 @@ export const independenceShort: Route = {
     // ---------------------------------------------------------------- 1
     {
       id: 'kiosk',
+      officialNumber: 1,
       name: 'הקיוסק הראשון',
       theme: 'מקום מפגש',
       address: 'שדרות רוטשילד פינת הרצל, סמוך לרוטשילד 10',
@@ -135,6 +144,7 @@ export const independenceShort: Route = {
     // ---------------------------------------------------------------- 2
     {
       id: 'mosaic',
+      officialNumber: 2,
       name: 'מזרקת הפסיפס של נחום גוטמן',
       theme: 'סיפורים וזהות',
       address: 'ליד שדרות רוטשילד 3',
@@ -221,6 +231,7 @@ export const independenceShort: Route = {
     // ---------------------------------------------------------------- 3
     {
       id: 'weiss-house',
+      officialNumber: 3,
       name: 'בית עקיבא אריה ויס',
       theme: 'חלוקה הוגנת',
       address: 'הרצל 2',
@@ -309,6 +320,7 @@ export const independenceShort: Route = {
     // ---------------------------------------------------------------- 4
     {
       id: 'gymnasium',
+      officialNumber: 4,
       name: 'הגימנסיה הרצליה ומגדל שלום',
       theme: 'שימור ופיתוח',
       address: 'אחד העם 9, ביקור מבחוץ',
@@ -393,6 +405,7 @@ export const independenceShort: Route = {
     // ---------------------------------------------------------------- 5
     {
       id: 'founders',
+      officialNumber: 8,
       name: 'האנדרטה למייסדי העיר',
       theme: 'האנשים שמאחורי העיר',
       address: 'ליד שדרות רוטשילד 20',
@@ -465,6 +478,7 @@ export const independenceShort: Route = {
     // ---------------------------------------------------------------- 6
     {
       id: 'dizengoff-statue',
+      officialNumber: 9,
       name: 'פסל מאיר דיזנגוף',
       theme: 'ניהול העיר',
       address: 'מול שדרות רוטשילד 16',
@@ -544,6 +558,7 @@ export const independenceShort: Route = {
     // ---------------------------------------------------------------- 7
     {
       id: 'independence-hall',
+      officialNumber: 10,
       name: 'היכל העצמאות',
       theme: 'עקרונות משותפים',
       address: 'שדרות רוטשילד 16, ביקור מבחוץ בלבד',
@@ -675,6 +690,7 @@ export const independenceShort: Route = {
       'אין הוראות הליכה מפורטות בין התחנות. כפתור הניווט פותח את Google Maps לפי שם התחנה והכתובת.',
       'אין קישורים מאומתים לפתיחת תחנה מסוימת באפליקציה הרשמית, ולכן המעבר אליה ידני. גם שמות התחנות בתוך האפליקציה לא אומתו.',
       'הסימון ״צפינו / האזנו״ ידני: אין דרך לדעת אם קטע נצפה או הסתיים. אין במשחק שאלות שתשובתן תלויה בסרטון.',
+      'מקור המפה המאוירת והרשאת השימוש בה עדיין לא צוינו באפליקציה.',
     ],
     contentCheckedOn: '2026-10-09',
   },

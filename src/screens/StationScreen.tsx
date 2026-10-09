@@ -107,7 +107,14 @@ export function StationScreen({ route, trail, stationId }: { route: Route; trail
             {station.name}
           </h1>
           <p className="address">{station.address}</p>
-          <p className="theme-chip">נושא: {station.theme}</p>
+          <p className="station-tags">
+            <span className="theme-chip">נושא: {station.theme}</span>
+            {station.officialNumber && route.map && (
+              <a className="theme-chip map-chip" href={hrefFor({ name: 'stations' })}>
+                במפת השביל: תחנה {station.officialNumber}
+              </a>
+            )}
+          </p>
         </div>
       </div>
 

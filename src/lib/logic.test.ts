@@ -602,3 +602,12 @@ describe('official app media', () => {
   })
 })
 
+describe('trail map', () => {
+  it('is bundled with the app and numbers our stations as on the official map', () => {
+    expect(route.map).toMatchObject({ width: 1179, height: 834 })
+    expect(route.map?.src).toMatch(/trail-map/)
+    expect(route.map?.alt.length).toBeGreaterThan(20)
+    expect(route.stations.map((s) => s.officialNumber)).toEqual([1, 2, 3, 4, 8, 9, 10])
+  })
+})
+

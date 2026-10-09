@@ -1,6 +1,7 @@
 import type { Route } from '../content'
 import { StationGlyph } from '../components/Icons'
 import { StatusChip } from '../components/StatusChip'
+import { TrailMap } from '../components/TrailMap'
 import { countByStatus } from '../lib/progress'
 import { hrefFor } from '../lib/router'
 import type { Trail } from '../lib/useTrail'
@@ -22,6 +23,8 @@ export function StationsScreen({ route, trail }: { route: Route; trail: Trail })
           {skipped > 0 && `, דילגנו על ${skipped}`}. אפשר לפתוח כל תחנה בכל זמן.
         </p>
       </div>
+
+      <TrailMap route={route} />
 
       <ol className="station-list">
         {route.stations.map((station, i) => {
@@ -50,6 +53,7 @@ export function StationsScreen({ route, trail }: { route: Route; trail: Trail })
                   <span className="row-meta">
                     <StatusChip status={status} />
                     {current && <span className="chip chip-current">כאן עצרנו</span>}
+                    {station.officialNumber && <span className="chip chip-map">במפה: {station.officialNumber}</span>}
                   </span>
                 </span>
               </a>
